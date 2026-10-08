@@ -24,6 +24,9 @@
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.3.0"
   },
+"optionalDependencies": {
+  "@cipherstash/auth-linux-x64-gnu": "*"
+},
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
