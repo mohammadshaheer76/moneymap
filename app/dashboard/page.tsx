@@ -75,7 +75,7 @@ export default async function DashboardPage() {
         <div className="relative">
           <p className="text-white/80 text-sm mb-1">Welcome back 👋</p>
           <h1 className="text-3xl font-bold">
-            {profile?.full_name || 'User'}
+            {String(profile?.full_name || 'User')}
           </h1>
           <p className="text-white/70 text-sm mt-1">{user.email}</p>
         </div>

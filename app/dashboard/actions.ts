@@ -13,7 +13,7 @@ export async function generateMonthlySummary(allocationId: string) {
 
   const es = await encryptedSupabase(supabase)
 
-  const { data: allocation, error: allocError } = await es
+  const { data: allocation, error: allocError } = await supabase
     .from('salary_allocations')
     .select('*')
     .eq('id', allocationId)
@@ -24,7 +24,7 @@ export async function generateMonthlySummary(allocationId: string) {
     return { error: 'Allocation not found' }
   }
 
-  const { data: expenses, error: expError } = await es
+  const { data: expenses, error: expError } = await supabase
     .from('expenses')
     .select('amount, category_id')
     .eq('allocation_id', allocationId)
@@ -50,54 +50,55 @@ export async function generateMonthlySummary(allocationId: string) {
     const cat = categoryMap.get(exp.category_id)
     if (!cat) continue
 
-    if (cat.type === 'needs') needs_spent += exp.amount
-    else if (cat.type === 'wants') wants_spent += exp.amount
-    else if (cat.type === 'savings') savings_spent += exp.amount
+    const amount = Number(exp.amount)
+
+    if (cat.type === 'needs') needs_spent += amount
+    else if (cat.type === 'wants') wants_spent += amount
+    else if (cat.type === 'savings') savings_spent += amount
 
     const key = cat.id
     if (!categoryTotals[key]) {
       categoryTotals[key] = { name: cat.name, type: cat.type, total: 0 }
     }
-    categoryTotals[key].total += exp.amount
+    categoryTotals[key].total += amount
   }
+
+  const netSalary = Number(allocation.net_salary)
+  const needsAmount = Number(allocation.needs_amount)
+  const wantsAmount = Number(allocation.wants_amount)
+  const savingsAmount = Number(allocation.savings_amount)
 
   const total_spent = needs_spent + wants_spent + savings_spent
   const total_saved = savings_spent
-  const savings_rate = allocation.net_salary > 0
-    ? (total_saved / allocation.net_salary) * 100
-    : 0
-  const needs_utilization = allocation.needs_amount > 0
-    ? (needs_spent / allocation.needs_amount) * 100
-    : 0
-  const wants_utilization = allocation.wants_amount > 0
-    ? (wants_spent / allocation.wants_amount) * 100
-    : 0
+  const savings_rate = netSalary > 0 ? (total_saved / netSalary) * 100 : 0
+  const needs_utilization = needsAmount > 0 ? (needs_spent / needsAmount) * 100 : 0
+  const wants_utilization = wantsAmount > 0 ? (wants_spent / wantsAmount) * 100 : 0
 
   const overspent: Array<{ category: string; budget: number; spent: number }> = []
   for (const data of Object.values(categoryTotals)) {
     let budget = 0
-    if (data.type === 'needs') budget = allocation.needs_amount
-    else if (data.type === 'wants') budget = allocation.wants_amount
-    else if (data.type === 'savings') budget = allocation.savings_amount
+    if (data.type === 'needs') budget = needsAmount
+    else if (data.type === 'wants') budget = wantsAmount
+    else if (data.type === 'savings') budget = savingsAmount
 
     if (data.total > budget) {
       overspent.push({ category: data.name, budget, spent: data.total })
     }
   }
 
-  const { error: saveError } = await es
+  const { error: saveError } = await supabase
     .from('monthly_summary')
     .upsert(
       {
         user_id: user.id,
         allocation_id: allocationId,
         month: allocation.month,
-        total_income: allocation.net_salary,
-        needs_budget: allocation.needs_amount,
+        total_income: netSalary,
+        needs_budget: needsAmount,
         needs_spent,
-        wants_budget: allocation.wants_amount,
+        wants_budget: wantsAmount,
         wants_spent,
-        savings_budget: allocation.savings_amount,
+        savings_budget: savingsAmount,
         savings_spent,
         total_spent,
         total_saved,
