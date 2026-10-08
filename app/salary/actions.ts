@@ -1,7 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSupabase } from '@cipherstash/stack-supabase'
+import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
+import { encryptedSchemas, getWasmConfig, type UserProfileRow } from '@/src/encryption'
 import { revalidatePath } from 'next/cache'
 
 export async function saveSalary(data: {
@@ -18,10 +19,15 @@ export async function saveSalary(data: {
     return { error: 'You must be logged in.' }
   }
 
-  const db = await encryptedSupabase(supabase)
+  const db = await encryptedSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { schemas: encryptedSchemas, config: getWasmConfig() }
+  )
 
   const { data: profile } = await db
     .from('user_profiles')
+    .returns<UserProfileRow>()
     .select('*')
     .eq('user_id', user.id)
     .single()
@@ -30,7 +36,6 @@ export async function saveSalary(data: {
     return { error: 'Please complete your profile first.' }
   }
 
-  // Suggested split based on profile
   let suggestedNeeds = 50, suggestedWants = 30, suggestedSavings = 20
 
   if (profile.marital_status === 'single' && profile.living_situation === 'family_home') {
@@ -41,12 +46,10 @@ export async function saveSalary(data: {
     suggestedNeeds = 55; suggestedWants = 25; suggestedSavings = 20
   }
 
-  // User-provided values ya suggested values
   const needs = data.needs_percent ?? suggestedNeeds
   const wants = data.wants_percent ?? suggestedWants
   const savings = data.savings_percent ?? suggestedSavings
 
-  // Validate total = 100
   if (needs + wants + savings !== 100) {
     return { error: `Percentages ka total 100% hona chahiye. Abhi ${needs + wants + savings}% hai.` }
   }

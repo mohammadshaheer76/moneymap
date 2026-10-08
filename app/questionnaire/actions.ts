@@ -1,6 +1,7 @@
 'use server'
 
-import { encryptedSupabase } from '@cipherstash/stack-supabase'
+import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
+import { encryptedSchemas, getWasmConfig, type UserProfileRow } from '@/src/encryption'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -21,10 +22,15 @@ export async function saveProfile(formData: {
     return { error: 'Please login first' }
   }
 
-  const es = await encryptedSupabase(supabase)
+  const es = await encryptedSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { schemas: encryptedSchemas, config: getWasmConfig() }
+  )
 
   const { error } = await es
     .from('user_profiles')
+    .returns<UserProfileRow>()
     .upsert(
       {
         user_id: user.id,

@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSupabase } from '@cipherstash/stack-supabase'
+import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
 
 // Categories fetch karo (default + user ki custom)
 export async function getCategories() {

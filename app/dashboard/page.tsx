@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSupabase } from '@cipherstash/stack-supabase'
+import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
+import { encryptedSchemas, getWasmConfig, type UserProfileRow } from '@/src/encryption'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -8,10 +9,16 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const es = await encryptedSupabase(supabase)
+  const es = await encryptedSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { schemas: encryptedSchemas, config: getWasmConfig() }
+  )
+
   const { data: profile } = await es
     .from('user_profiles')
-    .select('full_name')
+    .returns<UserProfileRow>()
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
@@ -68,7 +75,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header with gradient */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
@@ -99,7 +105,6 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white shadow-lg">
               <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10" />
@@ -127,97 +132,41 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Progress Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Needs - Blue */}
-            <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-blue-200 dark:border-blue-900/50 p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-2xl">
-                    🏠
+            {[
+              { label: 'Needs', spent: summary!.needs_spent, budget: summary!.needs_budget, color: 'blue', icon: '🏠' },
+              { label: 'Wants', spent: summary!.wants_spent, budget: summary!.wants_budget, color: 'amber', icon: '🎉' },
+              { label: 'Savings', spent: summary!.savings_spent, budget: summary!.savings_budget, color: 'emerald', icon: '💰' },
+            ].map((item) => (
+              <div key={item.label} className={`relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-${item.color}-200 dark:border-${item.color}-900/50 p-6 shadow-sm hover:shadow-md transition-shadow`}>
+                <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-${item.color}-500 to-${item.color}-400`} />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-${item.color}-100 to-${item.color}-200 dark:from-${item.color}-900/50 dark:to-${item.color}-800/50 flex items-center justify-center text-2xl`}>
+                      {item.icon}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 dark:text-white">{item.label}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-900 dark:text-white">Needs</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Essentials</p>
-                  </div>
+                  <span className={`text-lg font-bold text-${item.color}-600 dark:text-${item.color}-400`}>
+                    {Math.round(percent(item.spent, item.budget))}%
+                  </span>
                 </div>
-                <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                  {Math.round(percent(summary!.needs_spent, summary!.needs_budget))}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
-                <div
-                  className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
-                  style={{ width: `${percent(summary!.needs_spent, summary!.needs_budget)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{formatPKR(summary!.needs_spent)}</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(summary!.needs_budget)}</span>
-              </div>
-            </div>
-
-            {/* Wants - Amber */}
-            <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-amber-200 dark:border-amber-900/50 p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-400" />
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100 to-orange-200 dark:from-amber-900/50 dark:to-orange-800/50 flex items-center justify-center text-2xl">
-                    🎉
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900 dark:text-white">Wants</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Lifestyle</p>
-                  </div>
+                <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                  <div
+                    className={`h-2.5 rounded-full bg-gradient-to-r from-${item.color}-500 to-${item.color}-400 transition-all duration-500`}
+                    style={{ width: `${percent(item.spent, item.budget)}%` }}
+                  />
                 </div>
-                <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                  {Math.round(percent(summary!.wants_spent, summary!.wants_budget))}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
-                <div
-                  className="h-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-500"
-                  style={{ width: `${percent(summary!.wants_spent, summary!.wants_budget)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{formatPKR(summary!.wants_spent)}</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(summary!.wants_budget)}</span>
-              </div>
-            </div>
-
-            {/* Savings - Green */}
-            <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-200 dark:from-emerald-900/50 dark:to-teal-800/50 flex items-center justify-center text-2xl">
-                    💰
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900 dark:text-white">Savings</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Future</p>
-                  </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">{formatPKR(item.spent)}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.budget)}</span>
                 </div>
-                <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                  {Math.round(percent(summary!.savings_spent, summary!.savings_budget))}%
-                </span>
               </div>
-              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
-                <div
-                  className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
-                  style={{ width: `${percent(summary!.savings_spent, summary!.savings_budget)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">{formatPKR(summary!.savings_spent)}</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(summary!.savings_budget)}</span>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Category Breakdown */}
           {summary!.categoryTotals.length > 0 && (
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-5">
@@ -246,9 +195,8 @@ export default async function DashboardPage() {
         </>
       )}
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/questionnaire" className="group relative overflow-hidden flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 dark:hover:border-blue-500 transition-all">
+        <Link href="/questionnaire" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 dark:hover:border-blue-500 transition-all">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             👤
           </div>
@@ -257,7 +205,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400">Update your details</p>
           </div>
         </Link>
-        <Link href="/salary" className="group relative overflow-hidden flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-green-500 dark:hover:border-green-500 transition-all">
+        <Link href="/salary" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-green-500 dark:hover:border-green-500 transition-all">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-200 dark:from-green-900/50 dark:to-emerald-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             💵
           </div>
@@ -266,7 +214,7 @@ export default async function DashboardPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400">Edit this month's split</p>
           </div>
         </Link>
-        <Link href="/expenses" className="group relative overflow-hidden flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-purple-500 dark:hover:border-purple-500 transition-all">
+        <Link href="/expenses" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-purple-500 dark:hover:border-purple-500 transition-all">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-200 dark:from-purple-900/50 dark:to-pink-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             ➕
           </div>

@@ -1,13 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@cipherstash/stack", "@cipherstash/stack-supabase", "@cipherstash/auth"],
-  outputFileTracingIncludes: {
-    '/**': [
-      './node_modules/@cipherstash/**/*.node',
-      './node_modules/@cipherstash/**/*.wasm',
-    ],
-  },
+  // WASM version native module use nahi karta, isliye serverExternalPackages ki zaroorat nahi
 };
 
 export default nextConfig;

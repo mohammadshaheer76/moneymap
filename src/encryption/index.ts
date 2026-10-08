@@ -1,7 +1,7 @@
-import { Encryption, encryptedTable, types } from '@cipherstash/stack/v3'
+import { encryptedTable, types } from '@cipherstash/stack/eql/v3'
+import type { WasmClientConfig } from '@cipherstash/stack/wasm-inline'
 
 export const userProfiles = encryptedTable('user_profiles', {
-  full_name: types.TextEq('full_name'),
   marital_status: types.TextEq('marital_status'),
   living_situation: types.TextEq('living_situation'),
   family_type: types.TextEq('family_type'),
@@ -10,6 +10,37 @@ export const userProfiles = encryptedTable('user_profiles', {
   dependents_count: types.IntegerOrd('dependents_count'),
 })
 
-export const encryptionClient = await Encryption({
-  schemas: [userProfiles],
-})
+// WASM schemas object (key = table name)
+export const encryptedSchemas = {
+  user_profiles: userProfiles,
+} as const
+
+// WASM config
+export function getWasmConfig(): WasmClientConfig {
+  return {
+    workspaceCrn: process.env.CS_WORKSPACE_CRN!,
+    clientId: process.env.CS_CLIENT_ID!,
+    clientKey: process.env.CS_CLIENT_KEY!,
+    accessKey: process.env.CS_CLIENT_ACCESS_KEY!,
+  }
+}
+
+// ============================================
+// Row Types (plaintext + encrypted columns)
+// ============================================
+
+export type UserProfileRow = {
+  id: string
+  user_id: string
+  full_name: string | null
+  age: number | null
+  marital_status: string | null
+  living_situation: string | null
+  family_type: string | null
+  employment_type: string | null
+  dependents_count: number | null
+  has_dependents: boolean
+  has_other_income: boolean
+  created_at: string
+  updated_at: string
+}
