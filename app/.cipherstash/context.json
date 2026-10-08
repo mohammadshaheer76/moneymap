@@ -1,0 +1,12 @@
+{
+  "cliVersion": "1.1.1",
+  "integration": "supabase",
+  "encryptionClientPath": "./src/encryption/index.ts",
+  "packageManager": "npm",
+  "installCommand": "npm install @cipherstash/stack@1.1.1",
+  "envKeys": [],
+  "schemas": [],
+  "installedSkills": [],
+  "inlinedSkills": [],
+  "generatedAt": "2026-09-30T19:55:10.606Z"
+}

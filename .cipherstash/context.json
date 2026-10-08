@@ -1,0 +1,28 @@
+{
+  "cliVersion": "1.1.1",
+  "integration": "supabase",
+  "encryptionClientPath": "./src/encryption/index.ts",
+  "packageManager": "npm",
+  "installCommand": "npm install @cipherstash/stack@1.1.1",
+  "envKeys": [
+    "DATABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL"
+  ],
+  "schemas": [],
+  "installedSkills": [],
+  "inlinedSkills": [
+    "stash-encryption",
+    "stash-supabase",
+    "stash-indexing",
+    "stash-postgres",
+    "stash-edge",
+    "stash-managed-platforms",
+    "stash-deployment",
+    "stash-zerokms",
+    "stash-auth",
+    "stash-cli"
+  ],
+  "planStep": "rollout",
+  "generatedAt": "2026-09-30T19:37:32.071Z"
+}
