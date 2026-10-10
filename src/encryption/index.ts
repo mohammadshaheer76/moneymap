@@ -1,5 +1,5 @@
 import { encryptedTable, types } from '@cipherstash/stack/eql/v3'
-import type { WasmClientConfig } from '@cipherstash/stack/wasm-inline'
+import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
 
 export const userProfiles = encryptedTable('user_profiles', {
   marital_status: types.TextEq('marital_status'),
@@ -10,13 +10,11 @@ export const userProfiles = encryptedTable('user_profiles', {
   dependents_count: types.IntegerOrd('dependents_count'),
 })
 
-// WASM schemas object (key = table name)
 export const encryptedSchemas = {
   user_profiles: userProfiles,
 } as const
 
-// WASM config
-export function getWasmConfig(): WasmClientConfig {
+export function getWasmConfig() {
   return {
     workspaceCrn: process.env.CS_WORKSPACE_CRN!,
     clientId: process.env.CS_CLIENT_ID!,
@@ -25,8 +23,21 @@ export function getWasmConfig(): WasmClientConfig {
   }
 }
 
+// Singleton encrypted client — ek baar banao, hamesha reuse karo
+let _client: Awaited<ReturnType<typeof encryptedSupabase>> | null = null
+
+export async function getEncryptedClient() {
+  if (_client) return _client
+  _client = await encryptedSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { schemas: encryptedSchemas, config: getWasmConfig() }
+  )
+  return _client
+}
+
 // ============================================
-// Row Types (plaintext + encrypted columns)
+// Row Types
 // ============================================
 
 export type UserProfileRow = {

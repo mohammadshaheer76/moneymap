@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
-import { encryptedSchemas, getWasmConfig, type UserProfileRow } from '@/src/encryption'
+import { encryptedSchemas, getWasmConfig, getEncryptedClient, type UserProfileRow } from '@/src/encryption'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -9,16 +8,12 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const es = await encryptedSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { schemas: encryptedSchemas, config: getWasmConfig() }
-  )
+  const es = await getEncryptedClient()
 
   const { data: profile } = await es
     .from('user_profiles')
     .returns<UserProfileRow>()
-    .select('*')
+    .select('id, user_id, age, marital_status, living_situation, family_type, employment_type, dependents_count, has_dependents, has_other_income, created_at, updated_at')
     .eq('user_id', user.id)
     .single()
 
@@ -27,7 +22,7 @@ export default async function DashboardPage() {
 
   const { data: allocation } = await supabase
     .from('salary_allocations')
-    .select('*')
+    .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
     .eq('user_id', user.id)
     .eq('month', currentMonth)
     .maybeSingle()
