@@ -28,21 +28,48 @@ export async function saveProfile(formData: {
     { schemas: encryptedSchemas, config: getWasmConfig() }
   )
 
-  const { error } = await es
+  // Pehle check karo profile exist karti hai ya nahi
+  const { data: existing } = await es
     .from('user_profiles')
     .returns<UserProfileRow>()
-    .upsert(
-      {
-        user_id: user.id,
-        ...formData,
-      },
-      { onConflict: 'user_id' }
-    )
+    .select('id, user_id, full_name, age, marital_status, living_situation, family_type, employment_type, dependents_count, has_dependents, has_other_income, created_at, updated_at')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  if (error) {
-    return { error: error.message }
+  // Saara encrypted data (full_name bhi shamil)
+  const encryptedData = {
+    full_name: formData.full_name,
+    age: formData.age,
+    marital_status: formData.marital_status,
+    living_situation: formData.living_situation,
+    family_type: formData.family_type,
+    employment_type: formData.employment_type,
+    dependents_count: formData.dependents_count,
+  }
+
+  if (existing) {
+    // UPDATE
+    const { error } = await es
+      .from('user_profiles')
+      .update(encryptedData)
+      .eq('user_id', user.id)
+
+    if (error) return { error: error.message }
+  } else {
+    // INSERT
+    const { error } = await es
+      .from('user_profiles')
+      .insert({
+        user_id: user.id,
+        ...encryptedData,
+        has_dependents: formData.dependents_count > 0,
+        has_other_income: false,
+      })
+
+    if (error) return { error: error.message }
   }
 
   revalidatePath('/questionnaire')
+  revalidatePath('/dashboard')
   redirect('/salary')
 }
