@@ -2,7 +2,7 @@ import { encryptedTable, types } from '@cipherstash/stack/eql/v3'
 import type { WasmClientConfig } from '@cipherstash/stack/wasm-inline'
 
 export const userProfiles = encryptedTable('user_profiles', {
-  full_name: types.Text('full_name'),
+  full_name: types.TextEq('full_name'),
   marital_status: types.TextEq('marital_status'),
   living_situation: types.TextEq('living_situation'),
   family_type: types.TextEq('family_type'),
