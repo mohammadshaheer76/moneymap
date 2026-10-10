@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSchemas, getWasmConfig, getEncryptedClient, type UserProfileRow } from '@/src/encryption'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -8,14 +7,11 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const es = await getEncryptedClient()
-
-  const { data: profile } = await es
+  const { data: profile } = await supabase
     .from('user_profiles')
-    .returns<UserProfileRow>()
-    .select('id, user_id, age, marital_status, living_situation, family_type, employment_type, dependents_count, has_dependents, has_other_income, created_at, updated_at')
+    .select('id, user_id, full_name, age, marital_status, living_situation, family_type, employment_type, dependents_count, has_dependents, has_other_income, created_at, updated_at')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
@@ -133,24 +129,23 @@ export default async function DashboardPage() {
               { label: 'Wants', spent: summary!.wants_spent, budget: summary!.wants_budget, color: 'amber', icon: '🎉' },
               { label: 'Savings', spent: summary!.savings_spent, budget: summary!.savings_budget, color: 'emerald', icon: '💰' },
             ].map((item) => (
-              <div key={item.label} className={`relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-${item.color}-200 dark:border-${item.color}-900/50 p-6 shadow-sm hover:shadow-md transition-shadow`}>
-                <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-${item.color}-500 to-${item.color}-400`} />
+              <div key={item.label} className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-${item.color}-100 to-${item.color}-200 dark:from-${item.color}-900/50 dark:to-${item.color}-800/50 flex items-center justify-center text-2xl`}>
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl">
                       {item.icon}
                     </div>
                     <div>
                       <p className="font-bold text-gray-900 dark:text-white">{item.label}</p>
                     </div>
                   </div>
-                  <span className={`text-lg font-bold text-${item.color}-600 dark:text-${item.color}-400`}>
+                  <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
                     {Math.round(percent(item.spent, item.budget))}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
                   <div
-                    className={`h-2.5 rounded-full bg-gradient-to-r from-${item.color}-500 to-${item.color}-400 transition-all duration-500`}
+                    className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
                     style={{ width: `${percent(item.spent, item.budget)}%` }}
                   />
                 </div>
@@ -191,8 +186,8 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/questionnaire" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 dark:hover:border-blue-500 transition-all">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+        <Link href="/questionnaire" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all">
+          <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             👤
           </div>
           <div>
@@ -200,8 +195,8 @@ export default async function DashboardPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400">Update your details</p>
           </div>
         </Link>
-        <Link href="/salary" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-green-500 dark:hover:border-green-500 transition-all">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-200 dark:from-green-900/50 dark:to-emerald-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+        <Link href="/salary" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-green-500 transition-all">
+          <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             💵
           </div>
           <div>
@@ -209,8 +204,8 @@ export default async function DashboardPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400">Edit this month's split</p>
           </div>
         </Link>
-        <Link href="/expenses" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-purple-500 dark:hover:border-purple-500 transition-all">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-200 dark:from-purple-900/50 dark:to-pink-800/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+        <Link href="/expenses" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-purple-500 transition-all">
+          <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
             ➕
           </div>
           <div>

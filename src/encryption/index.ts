@@ -1,32 +1,5 @@
-import { encryptedTable, types } from '@cipherstash/stack/eql/v3'
-import type { WasmClientConfig } from '@cipherstash/stack/wasm-inline'
-
-export const userProfiles = encryptedTable('user_profiles', {
-  full_name: types.TextEq('full_name'),
-  marital_status: types.TextEq('marital_status'),
-  living_situation: types.TextEq('living_situation'),
-  family_type: types.TextEq('family_type'),
-  employment_type: types.TextEq('employment_type'),
-  age: types.IntegerOrd('age'),
-  dependents_count: types.IntegerOrd('dependents_count'),
-})
-
-export const encryptedSchemas = {
-  user_profiles: userProfiles,
-} as const
-
-export function getWasmConfig(): WasmClientConfig {
-  return {
-    workspaceCrn: process.env.CS_WORKSPACE_CRN!,
-    clientId: process.env.CS_CLIENT_ID!,
-    clientKey: process.env.CS_CLIENT_KEY!,
-    accessKey: process.env.CS_CLIENT_ACCESS_KEY!,
-  }
-}
-
-// ============================================
-// Row Types
-// ============================================
+// CipherStash removed — using Supabase default encryption (AES-256 + TLS)
+// Yeh file future mein encryption add karne ke liye rakhi hai
 
 export type UserProfileRow = {
   id: string

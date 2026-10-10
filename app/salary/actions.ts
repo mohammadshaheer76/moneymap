@@ -1,8 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
-import { encryptedSchemas, getWasmConfig, type UserProfileRow } from '@/src/encryption'
 import { revalidatePath } from 'next/cache'
 
 export async function saveSalary(data: {
@@ -19,16 +17,10 @@ export async function saveSalary(data: {
     return { error: 'You must be logged in.' }
   }
 
-  const db = await encryptedSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { schemas: encryptedSchemas, config: getWasmConfig() }
-  )
-
-  const { data: profile } = await db
+  // Normal Supabase client se profile fetch karo
+  const { data: profile } = await supabase
     .from('user_profiles')
-    .returns<UserProfileRow>()
-    .select('*')
+    .select('marital_status, living_situation, full_name, age, family_type, employment_type, dependents_count')
     .eq('user_id', user.id)
     .single()
 

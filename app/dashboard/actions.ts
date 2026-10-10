@@ -1,7 +1,5 @@
 'use server'
 
-import { encryptedSupabase } from '@cipherstash/stack-supabase/wasm-inline'
-import { encryptedSchemas, getWasmConfig } from '@/src/encryption'
 import { createClient } from '@/lib/supabase/server'
 
 export async function generateMonthlySummary(allocationId: string) {
@@ -12,15 +10,9 @@ export async function generateMonthlySummary(allocationId: string) {
     return { error: 'Please login first' }
   }
 
-  const es = await encryptedSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { schemas: encryptedSchemas, config: getWasmConfig() }
-  )
-
   const { data: allocation, error: allocError } = await supabase
     .from('salary_allocations')
-    .select('*')
+    .select('id, user_id, month, net_salary, needs_amount, wants_amount, savings_amount')
     .eq('id', allocationId)
     .eq('user_id', user.id)
     .single()
