@@ -128,33 +128,43 @@ export default async function DashboardPage() {
               { label: 'Needs', spent: summary!.needs_spent, budget: summary!.needs_budget, color: 'blue', icon: '🏠' },
               { label: 'Wants', spent: summary!.wants_spent, budget: summary!.wants_budget, color: 'amber', icon: '🎉' },
               { label: 'Savings', spent: summary!.savings_spent, budget: summary!.savings_budget, color: 'emerald', icon: '💰' },
-            ].map((item) => (
-              <div key={item.label} className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl">
-                      {item.icon}
+            ].map((item) => {
+              const isOver = item.spent > item.budget;
+              const pct = percent(item.spent, item.budget);
+
+              return (
+                <div key={item.label} className={`relative overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border ${isOver ? 'border-red-500 dark:border-red-500/50 shadow-red-100 dark:shadow-none' : 'border-gray-200 dark:border-gray-800'} p-6 shadow-sm hover:shadow-md transition-shadow`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl ${isOver ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-100 dark:bg-gray-800'} flex items-center justify-center text-2xl`}>
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          {item.label}
+                          {isOver && <span className="text-[10px] uppercase bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded">Over</span>}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900 dark:text-white">{item.label}</p>
-                    </div>
+                    <span className={`text-lg font-bold ${isOver ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {Math.round(pct)}%
+                    </span>
                   </div>
-                  <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
-                    {Math.round(percent(item.spent, item.budget))}%
-                  </span>
+                  <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`}
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className={`${isOver ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {formatPKR(item.spent)}
+                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.budget)}</span>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 mb-3 overflow-hidden">
-                  <div
-                    className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-                    style={{ width: `${percent(item.spent, item.budget)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">{formatPKR(item.spent)}</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.budget)}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {summary!.categoryTotals.length > 0 && (

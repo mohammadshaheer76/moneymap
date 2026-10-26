@@ -116,7 +116,7 @@ export default function ExpensesPage() {
             type="number"
             value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             required
             min="1"
           />
@@ -127,7 +127,7 @@ export default function ExpensesPage() {
           <select
             value={form.category_id}
             onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             required
           >
             <option value="">-- Select a category --</option>
@@ -169,14 +169,14 @@ export default function ExpensesPage() {
               placeholder="Category name (e.g. Netflix)"
               value={customForm.name}
               onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
             <select
               value={customForm.type}
               onChange={(e) =>
                 setCustomForm({ ...customForm, type: e.target.value as any })
               }
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             >
               <option value="needs">Needs</option>
               <option value="wants">Wants</option>
@@ -198,7 +198,7 @@ export default function ExpensesPage() {
             type="text"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             placeholder="e.g. Dinner with friends"
           />
         </div>
@@ -209,7 +209,7 @@ export default function ExpensesPage() {
             type="date"
             value={form.expense_date}
             onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             required
           />
         </div>
