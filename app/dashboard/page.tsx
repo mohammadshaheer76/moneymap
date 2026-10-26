@@ -82,10 +82,10 @@ export default async function DashboardPage() {
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-3xl p-10 text-center">
           <div className="text-5xl mb-4">📅</div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            Is mahine ki salary enter nahi ki
+            No salary entered for this month
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            Apni salary enter karo aur MoneyMap aapke profile ke hisaab se best split suggest karega.
+            Enter your salary to let MoneyMap suggest the best split based on your profile.
           </p>
           <Link
             href="/salary"
@@ -117,7 +117,7 @@ export default async function DashboardPage() {
 
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 text-white shadow-lg">
               <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10" />
-              <p className="text-white/80 text-sm mb-1">Baqi</p>
+              <p className="text-white/80 text-sm mb-1">Available</p>
               <p className="text-3xl font-bold">{formatPKR(remaining)}</p>
               <p className="text-xs text-white/70 mt-2">Available to spend</p>
             </div>

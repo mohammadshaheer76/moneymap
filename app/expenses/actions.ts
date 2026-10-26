@@ -76,7 +76,7 @@ export async function saveExpense(data: {
       .single()
 
     if (allocError || !allocation) {
-      return { error: 'Pehle is mahine ki salary save karo.' }
+      return { error: `Please save this month's salary first.` }
     }
 
     const { error } = await supabase

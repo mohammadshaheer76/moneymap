@@ -41,7 +41,7 @@ export default function SalaryPage() {
         setWants(data.wants_percent)
         setSavings(data.savings_percent)
         setIsEdit(true)
-        setStatus('Is mahine ki salary already saved hai. Aap edit kar sakte ho.')
+        setStatus(`This month's salary is already saved. You can edit it.`)
       }
       setLoadingExisting(false)
     }
@@ -175,7 +175,7 @@ export default function SalaryPage() {
 
             {total !== 100 && (
               <p className="text-sm text-red-600 dark:text-red-400">
-                ⚠ Total exactly 100% hona chahiye. Abhi {total}% hai.
+                ⚠ Total must exactly equal 100%. Currently it is {total}%.
               </p>
             )}
           </div>

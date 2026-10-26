@@ -43,7 +43,7 @@ export async function saveSalary(data: {
   const savings = data.savings_percent ?? suggestedSavings
 
   if (needs + wants + savings !== 100) {
-    return { error: `Percentages ka total 100% hona chahiye. Abhi ${needs + wants + savings}% hai.` }
+    return { error: `Percentages must add up to 100%. Currently ${needs + wants + savings}%.` }
   }
 
   const needs_amount = (data.net_salary * needs) / 100
