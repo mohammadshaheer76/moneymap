@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { saveExpense, deleteExpense } from './actions'
+import { saveExpense, deleteExpense, createCategory } from './actions'
 
 export default function ExpensesPage() {
   const [amount, setAmount] = useState('')
@@ -13,6 +13,12 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // New Category Modal States
+  const [showNewCat, setShowNewCat] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatType, setNewCatType] = useState('wants')
+
   const supabase = createClient()
 
   useEffect(() => {
@@ -23,14 +29,12 @@ export default function ExpensesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Fetch categories
     const { data: cats } = await supabase
       .from('categories')
       .select('id, name, type')
       .or(`user_id.eq.${user.id},is_default.eq.true`)
     if (cats) setCategories(cats)
 
-    // Fetch current month's expenses
     const now = new Date()
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
     
@@ -69,24 +73,35 @@ export default function ExpensesPage() {
       setStatus('Expense saved successfully!')
       setAmount('')
       setDescription('')
-      fetchData() // Refresh list
+      fetchData()
     }
     setLoading(false)
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this expense?')) return
-    
     const result = await deleteExpense(id)
+    if (result.error) alert(result.error)
+    else fetchData()
+  }
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    const result = await createCategory(newCatName, newCatType)
+    
     if (result.error) {
       alert(result.error)
     } else {
-      fetchData() // Refresh list
+      setShowNewCat(false)
+      setNewCatName('')
+      fetchData() // Refresh categories list
     }
+    setLoading(false)
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white">
+    <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white relative">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Expense Tracking</h1>
         <p className="text-gray-600 dark:text-gray-400">Log your expenses here. Every entry is tracked against its category.</p>
@@ -104,18 +119,27 @@ export default function ExpensesPage() {
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
                 required
                 placeholder="e.g. 1500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewCat(true)} 
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  + Create new category
+                </button>
+              </div>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
                 required
               >
                 <option value="">-- Select a category --</option>
@@ -131,7 +155,7 @@ export default function ExpensesPage() {
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="e.g. Dinner with friends"
               />
             </div>
@@ -142,7 +166,7 @@ export default function ExpensesPage() {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
                 required
               />
             </div>
@@ -180,7 +204,7 @@ export default function ExpensesPage() {
                     <p className="font-bold">PKR {Number(exp.amount).toLocaleString()}</p>
                     <button 
                       onClick={() => handleDelete(exp.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 text-lg"
                       title="Delete expense"
                     >
                       🗑️
@@ -192,6 +216,56 @@ export default function ExpensesPage() {
           </div>
         </div>
       </div>
+
+      {/* Create Category Modal */}
+      {showNewCat && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-full max-w-sm border border-gray-200 dark:border-gray-800 shadow-xl">
+            <h3 className="text-lg font-bold mb-4">New Category</h3>
+            <form onSubmit={handleCreateCategory} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Category Name</label>
+                <input
+                  type="text"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800"
+                  required
+                  placeholder="e.g. Pet Food"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Type</label>
+                <select
+                  value={newCatType}
+                  onChange={(e) => setNewCatType(e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800"
+                >
+                  <option value="needs">Needs (Essential)</option>
+                  <option value="wants">Wants (Lifestyle)</option>
+                  <option value="savings">Savings (Investment)</option>
+                </select>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCat(false)}
+                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
