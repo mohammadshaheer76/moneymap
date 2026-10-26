@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
+import LogoutButton from './logout-button'
 
 export default function Nav() {
   const pathname = usePathname()
@@ -44,6 +45,10 @@ export default function Nav() {
               <span className="hidden md:inline">{link.label}</span>
             </Link>
           ))}
+
+          <div className="ml-2">
+            <LogoutButton />
+          </div>
 
           {mounted && (
             <button
