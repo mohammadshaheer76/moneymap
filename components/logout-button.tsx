@@ -1,17 +1,24 @@
-"use client";
+'use client'
 
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
-export function LogoutButton() {
-  const router = useRouter();
+export default function LogoutButton() {
+  const router = useRouter()
+  const supabase = createClient()
 
-  const logout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+    router.refresh()
+  }
 
-  return <Button onClick={logout}>Logout</Button>;
+  return (
+    <button
+      onClick={handleLogout}
+      className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 rounded-lg transition-colors"
+    >
+      Logout
+    </button>
+  )
 }
