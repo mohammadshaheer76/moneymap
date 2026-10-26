@@ -111,7 +111,7 @@ export default function ExpensesPage() {
         <h2 className="font-bold">New Expense</h2>
 
         <div>
-          <label className="block mb-1 font-medium">Amount (PKR)</label>
+          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Amount (PKR)</label>
           <input
             type="number"
             value={form.amount}
@@ -123,7 +123,7 @@ export default function ExpensesPage() {
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Category</label>
+          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Category</label>
           <select
             value={form.category_id}
             onChange={(e) => setForm({ ...form, category_id: e.target.value })}
@@ -193,7 +193,7 @@ export default function ExpensesPage() {
         )}
 
         <div>
-          <label className="block mb-1 font-medium">Description (optional)</label>
+          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Description (optional)</label>
           <input
             type="text"
             value={form.description}
@@ -204,7 +204,7 @@ export default function ExpensesPage() {
         </div>
 
         <div>
-          <label className="block mb-1 font-medium">Date</label>
+          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Date</label>
           <input
             type="date"
             value={form.expense_date}
