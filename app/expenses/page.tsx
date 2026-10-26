@@ -1,249 +1,196 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getCategories, createCategory, saveExpense, getMonthlyExpenses } from './actions'
-
-type Category = {
-  id: string
-  name: string
-  type: 'needs' | 'wants' | 'savings'
-  is_default: boolean
-}
-
-type Expense = {
-  id: string
-  amount: number
-  description: string | null
-  expense_date: string
-  categories: { name: string; type: string }
-}
+import { createClient } from '@/lib/supabase/client'
+import { saveExpense, deleteExpense } from './actions'
 
 export default function ExpensesPage() {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [allocation, setAllocation] = useState<any>(null)
-  const [showCustomForm, setShowCustomForm] = useState(false)
-
-  const [form, setForm] = useState({
-    amount: '',
-    category_id: '',
-    description: '',
-    expense_date: new Date().toISOString().split('T')[0],
-  })
-
-  const [customForm, setCustomForm] = useState({
-    name: '',
-    type: 'wants' as 'needs' | 'wants' | 'savings',
-  })
-
+  const [amount, setAmount] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [description, setDescription] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [categories, setCategories] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
   const [status, setStatus] = useState('')
-
-  const loadData = async () => {
-    const catResult = await getCategories()
-    if (catResult.categories) setCategories(catResult.categories)
-
-    const expResult = await getMonthlyExpenses()
-    if (expResult.expenses) setExpenses(expResult.expenses)
-    if (expResult.allocation) setAllocation(expResult.allocation)
-  }
+  const [loading, setLoading] = useState(false)
+  const supabase = createClient()
 
   useEffect(() => {
-    loadData()
+    fetchData()
   }, [])
+
+  async function fetchData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Fetch categories
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, name, type')
+      .or(`user_id.eq.${user.id},is_default.eq.true`)
+    if (cats) setCategories(cats)
+
+    // Fetch current month's expenses
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    
+    const { data: alloc } = await supabase
+      .from('salary_allocations')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('month', currentMonth)
+      .single()
+
+    if (alloc) {
+      const { data: exps } = await supabase
+        .from('expenses')
+        .select('*, categories(name)')
+        .eq('allocation_id', alloc.id)
+        .order('expense_date', { ascending: false })
+      if (exps) setExpenses(exps)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setStatus('Saving...')
+    setLoading(true)
+    setStatus('')
 
     const result = await saveExpense({
-      amount: parseFloat(form.amount),
-      category_id: form.category_id,
-      description: form.description,
-      expense_date: form.expense_date,
+      amount: Number(amount),
+      category_id: categoryId,
+      description,
+      expense_date: date,
     })
 
     if (result.error) {
-      setStatus('Error: ' + result.error)
+      setStatus(result.error)
     } else {
-      setStatus('Expense saved successfully.')
-      setForm({ ...form, amount: '', description: '' })
-      loadData()
+      setStatus('Expense saved successfully!')
+      setAmount('')
+      setDescription('')
+      fetchData() // Refresh list
     }
+    setLoading(false)
   }
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const result = await createCategory(customForm)
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this expense?')) return
+    
+    const result = await deleteExpense(id)
     if (result.error) {
-      setStatus('Error: ' + result.error)
+      alert(result.error)
     } else {
-      setStatus('Category added successfully.')
-      setCustomForm({ name: '', type: 'wants' })
-      setShowCustomForm(false)
-      loadData()
+      fetchData() // Refresh list
     }
-  }
-
-  const grouped = {
-    needs: categories.filter((c) => c.type === 'needs'),
-    wants: categories.filter((c) => c.type === 'wants'),
-    savings: categories.filter((c) => c.type === 'savings'),
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-2">Expense Tracking</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Log your expenses here. Every entry is tracked against its category.
-      </p>
+    <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Expense Tracking</h1>
+        <p className="text-gray-600 dark:text-gray-400">Log your expenses here. Every entry is tracked against its category.</p>
+      </div>
 
-      {!allocation && (
-        <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-          Please save this month&apos;s salary first —{' '}
-          <a href="/salary" className="text-blue-600 underline">
-            Salary page
-          </a>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Form Section */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">New Expense</h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (PKR)</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                required
+                placeholder="e.g. 1500"
+              />
+            </div>
 
-      {/* Expense Entry Form */}
-      <form onSubmit={handleSubmit} className="space-y-4 mb-8 p-4 border rounded bg-gray-50">
-        <h2 className="font-bold">New Expense</h2>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                required
+              >
+                <option value="">-- Select a category --</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                ))}
+              </select>
+            </div>
 
-        <div>
-          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Amount (PKR)</label>
-          <input
-            type="number"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            required
-            min="1"
-          />
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                placeholder="e.g. Dinner with friends"
+              />
+            </div>
 
-        <div>
-          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Category</label>
-          <select
-            value={form.category_id}
-            onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            required
-          >
-            <option value="">-- Select a category --</option>
-            <optgroup label="Needs">
-              {grouped.needs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Wants">
-              {grouped.wants.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Savings">
-              {grouped.savings.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <button
-            type="button"
-            onClick={() => setShowCustomForm(!showCustomForm)}
-            className="text-sm text-blue-600 mt-1 underline"
-          >
-            + Create new category
-          </button>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                required
+              />
+            </div>
 
-        {showCustomForm && (
-          <div className="p-3 border rounded bg-white space-y-3">
-            <input
-              type="text"
-              placeholder="Category name (e.g. Netflix)"
-              value={customForm.name}
-              onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
-              className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
-            <select
-              value={customForm.type}
-              onChange={(e) =>
-                setCustomForm({ ...customForm, type: e.target.value as any })
-              }
-              className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            >
-              <option value="needs">Needs</option>
-              <option value="wants">Wants</option>
-              <option value="savings">Savings</option>
-            </select>
             <button
-              type="button"
-              onClick={handleCreateCategory}
-              className="w-full bg-green-600 text-white p-2 rounded"
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 mt-2"
             >
-              Add Category
+              {loading ? 'Saving...' : 'Save Expense'}
             </button>
-          </div>
-        )}
 
-        <div>
-          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Description (optional)</label>
-          <input
-            type="text"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            placeholder="e.g. Dinner with friends"
-          />
+            {status && (
+              <p className={`text-sm text-center mt-2 ${status.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>
+                {status}
+              </p>
+            )}
+          </form>
         </div>
 
+        {/* Expense List Section */}
         <div>
-          <label className="text-gray-700 dark:text-gray-300 block mb-1 font-medium">Date</label>
-          <input
-            type="date"
-            value={form.expense_date}
-            onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
-            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-        >
-          Save Expense
-        </button>
-
-        {status && <p className="text-center text-sm">{status}</p>}
-      </form>
-
-      {/* This Month's Expenses */}
-      <div>
-        <h2 className="text-lg font-bold mb-3">This Month&apos;s Expenses</h2>
-        {expenses.length === 0 ? (
-          <p className="text-sm text-gray-500">No expenses recorded yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {expenses.map((exp) => (
-              <div key={exp.id} className="flex justify-between p-3 border rounded">
-                <div>
-                  <p className="font-medium">{exp.categories?.name || 'Unknown'}</p>
-                  <p className="text-xs text-gray-500">
-                    {exp.expense_date} {exp.description && `• ${exp.description}`}
-                  </p>
+          <h2 className="text-lg font-semibold mb-4">This Month's Expenses</h2>
+          <div className="space-y-3">
+            {expenses.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">No expenses logged yet.</p>
+            ) : (
+              expenses.map((exp) => (
+                <div key={exp.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 flex justify-between items-center group">
+                  <div>
+                    <p className="font-medium">{exp.categories?.name || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{exp.expense_date} {exp.description && `• ${exp.description}`}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <p className="font-bold">PKR {Number(exp.amount).toLocaleString()}</p>
+                    <button 
+                      onClick={() => handleDelete(exp.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete expense"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-                <p className="font-bold">PKR {exp.amount.toLocaleString()}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
