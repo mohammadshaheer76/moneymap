@@ -196,27 +196,67 @@ export default async function DashboardPage() {
           </div>
 
           {summary!.categoryTotals.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-5">
-                <span className="text-xl">📂</span>
-                <h3 className="font-bold text-gray-900 dark:text-white">Category Breakdown</h3>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">📂</span>
+                  <h3 className="font-bold text-gray-900 dark:text-white">Category-wise Spending Report</h3>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">See exactly where your money goes.</p>
               </div>
-              <div className="space-y-2">
-                {summary!.categoryTotals.sort((a, b) => b.total - a.total).map((cat, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                        cat.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                        cat.type === 'wants' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
-                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                      }`}>
-                        {cat.type}
-                      </span>
-                      <span className="font-medium text-gray-900 dark:text-white">{cat.name}</span>
-                    </div>
-                    <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(cat.total)}</span>
-                  </div>
-                ))}
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-sm">
+                      <th className="p-4 font-medium">Category</th>
+                      <th className="p-4 font-medium">Type</th>
+                      <th className="p-4 font-medium text-right">Spent</th>
+                      <th className="p-4 font-medium text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {summary!.categoryTotals.sort((a, b) => b.total - a.total).map((cat, i) => {
+                      // Calculate budget for this category type
+                      let budgetForType = 0;
+                      if (cat.type === 'needs') budgetForType = summary!.needs_budget;
+                      else if (cat.type === 'wants') budgetForType = summary!.wants_budget;
+                      else if (cat.type === 'savings') budgetForType = summary!.savings_budget;
+
+                      // Find total spent in this type
+                      let totalSpentInType = 0;
+                      if (cat.type === 'needs') totalSpentInType = summary!.needs_spent;
+                      else if (cat.type === 'wants') totalSpentInType = summary!.wants_spent;
+                      else if (cat.type === 'savings') totalSpentInType = summary!.savings_spent;
+
+                      const isOverBudget = totalSpentInType > budgetForType;
+                      const percentUsed = budgetForType > 0 ? (totalSpentInType / budgetForType) * 100 : 0;
+
+                      return (
+                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                          <td className="p-4 font-medium text-gray-900 dark:text-white">{cat.name}</td>
+                          <td className="p-4">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                              cat.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                              cat.type === 'wants' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                              'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                            }`}>
+                              {cat.type}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right font-bold text-gray-900 dark:text-white">
+                            {formatPKR(cat.total)}
+                          </td>
+                          <td className="p-4 text-right">
+                            <span className={`text-sm ${isOverBudget ? 'text-red-500 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+                              {isOverBudget ? '⚠️ Over Budget' : `${Math.round(percentUsed)}% of ${cat.type} used`}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
