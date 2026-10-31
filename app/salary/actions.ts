@@ -17,10 +17,10 @@ export async function saveSalary(data: {
     return { error: 'You must be logged in.' }
   }
 
-  // Normal Supabase client se profile fetch karo
+  // 1. Profile fetch karo
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('marital_status, living_situation, full_name, age, family_type, employment_type, dependents_count')
+    .select('*')
     .eq('user_id', user.id)
     .single()
 
@@ -28,16 +28,56 @@ export async function saveSalary(data: {
     return { error: 'Please complete your profile first.' }
   }
 
-  let suggestedNeeds = 50, suggestedWants = 30, suggestedSavings = 20
+  // 2. Saare budget rules fetch karo (Priority ke hisaab se: chota number pehle)
+  const { data: rules } = await supabase
+    .from('budget_rules')
+    .select('*')
+    .order('priority', { ascending: true })
 
-  if (profile.marital_status === 'single' && profile.living_situation === 'family_home') {
-    suggestedNeeds = 40; suggestedWants = 25; suggestedSavings = 35
-  } else if (profile.marital_status === 'single' && profile.living_situation === 'rented') {
-    suggestedNeeds = 50; suggestedWants = 25; suggestedSavings = 25
-  } else if (profile.marital_status === 'married') {
-    suggestedNeeds = 55; suggestedWants = 25; suggestedSavings = 20
+  let suggestedNeeds = 50
+  let suggestedWants = 30
+  let suggestedSavings = 20
+
+  if (rules && rules.length > 0) {
+    // 3. Har rule ko check karo ke kya woh user ke profile se match karta hai
+    for (const rule of rules) {
+      let matches = true
+      const conditions = rule.condition_json as Record<string, any>
+
+      // Agar condition_json khaali hai (Default Rule), toh isko skip karo abhi
+      if (!conditions || Object.keys(conditions).length === 0) continue
+
+      for (const [key, value] of Object.entries(conditions)) {
+        // Profile object mein value check karo
+        const profileValue = (profile as any)[key]
+        
+        if (profileValue !== value) {
+          matches = false
+          break
+        }
+      }
+
+      // Agar sab conditions match ho gayin, toh yeh rule apply karo aur loop tor do
+      if (matches) {
+        suggestedNeeds = rule.needs_percent
+        suggestedWants = rule.wants_percent
+        suggestedSavings = rule.savings_percent
+        break // Pehla match mil gaya, ab aage mat dekho
+      }
+    }
+
+    // 4. Agar koi specific rule match nahi hua, toh Default rule lagao
+    if (suggestedNeeds === 50 && suggestedWants === 30) {
+      const defaultRule = rules.find(r => !r.condition_json || Object.keys(r.condition_json).length === 0)
+      if (defaultRule) {
+        suggestedNeeds = defaultRule.needs_percent
+        suggestedWants = defaultRule.wants_percent
+        suggestedSavings = defaultRule.savings_percent
+      }
+    }
   }
 
+  // 5. Agar user ne manually percentages diye hain, toh unhe use karo
   const needs = data.needs_percent ?? suggestedNeeds
   const wants = data.wants_percent ?? suggestedWants
   const savings = data.savings_percent ?? suggestedSavings
@@ -77,10 +117,5 @@ export async function saveSalary(data: {
   return {
     success: true,
     split: { needs, wants, savings, needs_amount, wants_amount, savings_amount },
-    suggested: {
-      needs: suggestedNeeds,
-      wants: suggestedWants,
-      savings: suggestedSavings,
-    },
   }
 }

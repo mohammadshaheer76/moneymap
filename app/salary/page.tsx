@@ -79,7 +79,7 @@ export default function SalaryPage() {
       setLoading(false)
     } else {
       setStatus('✓ Salary allocation saved successfully.')
-      if (result.suggested) setSuggested(result.suggested)
+      if (result.split) setSuggested(result.split)
       setLoading(false)
       router.refresh()
     }
