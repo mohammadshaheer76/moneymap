@@ -30,29 +30,27 @@ export default function ExpensesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    // 1. Categories fetch karo
     const { data: cats } = await supabase
       .from('categories')
       .select('id, name, type')
       .or(`user_id.eq.${user.id},is_default.eq.true`)
     if (cats) setCategories(cats)
 
-    const now = new Date()
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-    
-    const { data: alloc } = await supabase
-      .from('salary_allocations')
-      .select('id')
+    // 2. Direct user ke saare expenses uthao (bina kisi allocation ki shart ke)
+    const { data: exps, error } = await supabase
+      .from('expenses')
+      .select('*, categories(name)')
       .eq('user_id', user.id)
-      .eq('month', currentMonth)
-      .single()
+      .order('expense_date', { ascending: false })
 
-    if (alloc) {
-      const { data: exps } = await supabase
-        .from('expenses')
-        .select('*, categories(name)')
-        .eq('allocation_id', alloc.id)
-        .order('expense_date', { ascending: false })
-      if (exps) setExpenses(exps)
+    if (error) {
+      console.error("Error fetching expenses:", error)
+      return
+    }
+
+    if (exps) {
+      setExpenses(exps)
     }
   }
 
