@@ -18,6 +18,7 @@ export default function Nav() {
     { href: '/questionnaire', label: 'Profile', icon: '👤' },
     { href: '/salary', label: 'Salary', icon: '💵' },
     { href: '/expenses', label: 'Expenses', icon: '🛒' },
+    { href: '/inventory', label: 'Inventory', icon: '📦' },
   ]
 
   return (

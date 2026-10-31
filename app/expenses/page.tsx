@@ -8,6 +8,7 @@ export default function ExpensesPage() {
   const [amount, setAmount] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
+  const [addToInventory, setAddToInventory] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [categories, setCategories] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
@@ -65,6 +66,7 @@ export default function ExpensesPage() {
       category_id: categoryId,
       description,
       expense_date: date,
+      add_to_inventory: addToInventory,
     })
 
     if (result.error) {
@@ -73,6 +75,7 @@ export default function ExpensesPage() {
       setStatus('Expense saved successfully!')
       setAmount('')
       setDescription('')
+      setAddToInventory(false)
       fetchData()
     }
     setLoading(false)
@@ -156,9 +159,22 @@ export default function ExpensesPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="e.g. Dinner with friends"
+                placeholder="e.g. Nike Shoes"
               />
+
+            <div className="flex items-center gap-2 mt-2">
+              <input 
+                type="checkbox" 
+                id="inv" 
+                checked={addToInventory} 
+                onChange={(e) => setAddToInventory(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded"
+              />
+              <label htmlFor="inv" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                I bought this as an asset (Add to Inventory)
+              </label>
             </div>
+</div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
