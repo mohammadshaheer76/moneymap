@@ -13,7 +13,7 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Latest salary fetch karo (Month ke hisaab se)
+  // Latest salary allocation fetch karo (by month)
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
@@ -26,25 +26,32 @@ export default async function DashboardPage() {
   if (allocation) {
     const { data: expenses } = await supabase
       .from('expenses')
-      .select('amount, category_id, description')
+      .select('amount, category_id, description, expense_date')
       .eq('allocation_id', allocation.id)
 
     const { data: categories } = await supabase.from('categories').select('id, name, type')
     const categoryMap = new Map((categories || []).map((c) => [c.id, c]))
 
     let needs_spent = 0, wants_spent = 0, savings_spent = 0
-    const categoryTotals: Record<string, { name: string; type: string; total: number }> = {}
+    const flatExpenses: any[] = []
 
     for (const exp of expenses || []) {
       const cat = categoryMap.get(exp.category_id)
       if (!cat) continue
       const amt = Number(exp.amount)
+      
       if (cat.type === 'needs') needs_spent += amt
       else if (cat.type === 'wants') wants_spent += amt
       else if (cat.type === 'savings') savings_spent += amt
       
-      if (!categoryTotals[cat.id]) categoryTotals[cat.id] = { name: cat.name, type: cat.type, total: 0 }
-      categoryTotals[cat.id].total += amt
+      flatExpenses.push({
+        id: exp.description || cat.name,
+        name: exp.description || cat.name,
+        category: cat.name,
+        type: cat.type,
+        amount: amt,
+        date: exp.expense_date
+      })
     }
 
     summary = {
@@ -55,7 +62,7 @@ export default async function DashboardPage() {
       wants_spent,
       savings_budget: Number(allocation.savings_amount),
       savings_spent,
-      categoryTotals: Object.values(categoryTotals).sort((a, b) => b.total - a.total), // Sort desc
+      topExpenses: flatExpenses.sort((a, b) => b.amount - a.amount).slice(0, 5),
     }
   }
 
@@ -140,7 +147,7 @@ export default async function DashboardPage() {
             })}
           </div>
 
-          {summary!.categoryTotals.length > 0 && (
+          {summary!.topExpenses && summary!.topExpenses.length > 0 && (
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
@@ -152,19 +159,19 @@ export default async function DashboardPage() {
                 </Link>
               </div>
               <div className="space-y-2">
-                {summary!.categoryTotals.slice(0, 5).map((cat, i) => (
+                {summary!.topExpenses.map((item: any, i: number) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                        cat.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                        cat.type === 'wants' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                        item.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                        item.type === 'wants' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                         'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
                       }`}>
-                        {cat.type}
+                        {item.category}
                       </span>
-                      <span className="font-medium text-gray-900 dark:text-white">{cat.name}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
                     </div>
-                    <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(cat.total)}</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.amount)}</span>
                   </div>
                 ))}
               </div>
