@@ -167,6 +167,34 @@ export default async function DashboardPage() {
             })}
           </div>
 
+          {/* MONTHLY SUMMARY SECTION */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">📈</span>
+              <h3 className="font-bold text-gray-900 dark:text-white">Monthly Summary</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Income</p>
+                <p className="font-bold text-gray-900 dark:text-white">{formatPKR(summary!.total_income)}</p>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Spent</p>
+                <p className="font-bold text-gray-900 dark:text-white">{formatPKR(summary!.needs_spent + summary!.wants_spent + summary!.savings_spent)}</p>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Saved</p>
+                <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatPKR(summary!.savings_spent)}</p>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Remaining</p>
+                <p className={`font-bold ${remaining < 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPKR(remaining)}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {summary!.categoryTotals.length > 0 && (
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-5">
