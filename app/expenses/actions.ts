@@ -8,6 +8,7 @@ export async function saveExpense(data: {
   category_id: string
   description: string
   expense_date: string
+  add_to_inventory?: boolean
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,6 +29,7 @@ export async function saveExpense(data: {
     return { error: 'Please save this month\'s salary first.' }
   }
 
+  // 1. Expense save karo
   const { error } = await supabase
     .from('expenses')
     .insert({
@@ -41,7 +43,19 @@ export async function saveExpense(data: {
 
   if (error) return { error: error.message }
 
+  // 2. Agar 'Add to Inventory' check kiya hai, toh inventory mein bhi save karo
+  if (data.add_to_inventory) {
+    await supabase.from('inventory').insert({
+      user_id: user.id,
+      item_name: data.description || 'Unknown Item',
+      purchase_price: data.amount,
+      purchase_date: data.expense_date,
+      category: 'Purchased'
+    })
+  }
+
   revalidatePath('/expenses')
+  revalidatePath('/inventory')
   revalidatePath('/dashboard')
   return { success: true }
 }
