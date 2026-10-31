@@ -27,14 +27,14 @@ export default async function DashboardPage() {
   if (allocation) {
     const { data: expenses } = await supabase
       .from('expenses')
-      .select('amount, category_id')
+      .select('amount, category_id, description')
       .eq('allocation_id', allocation.id)
 
     const { data: categories } = await supabase.from('categories').select('id, name, type')
     const categoryMap = new Map((categories || []).map((c) => [c.id, c]))
 
     let needs_spent = 0, wants_spent = 0, savings_spent = 0
-    const categoryTotals: Record<string, { name: string; type: string; total: number }> = {}
+    const categoryTotals: Record<string, { name: string; type: string; total: number; items: { desc: string; amount: number }[] }> = {}
 
     for (const exp of expenses || []) {
       const cat = categoryMap.get(exp.category_id)
@@ -43,8 +43,16 @@ export default async function DashboardPage() {
       if (cat.type === 'needs') needs_spent += amt
       else if (cat.type === 'wants') wants_spent += amt
       else if (cat.type === 'savings') savings_spent += amt
-      if (!categoryTotals[cat.id]) categoryTotals[cat.id] = { name: cat.name, type: cat.type, total: 0 }
+      
+      if (!categoryTotals[cat.id]) {
+        categoryTotals[cat.id] = { name: cat.name, type: cat.type, total: 0, items: [] }
+      }
       categoryTotals[cat.id].total += amt
+      
+      // Description ko save karo
+      if (exp.description) {
+        categoryTotals[cat.id].items.push({ desc: exp.description, amount: amt })
+      }
     }
 
     summary = {
@@ -234,7 +242,21 @@ export default async function DashboardPage() {
 
                       return (
                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                          <td className="p-4 font-medium text-gray-900 dark:text-white">{cat.name}</td>
+                          <td className="p-4">
+                            <p className="font-medium text-gray-900 dark:text-white">{cat.name}</p>
+                            {cat.items && cat.items.length > 0 && (
+                              <div className="mt-1 space-y-0.5">
+                                {cat.items.slice(0, 3).map((item, idx) => (
+                                  <p key={idx} className="text-xs text-gray-500 dark:text-gray-400">
+                                    • {item.desc} (PKR {item.amount.toLocaleString()})
+                                  </p>
+                                ))}
+                                {cat.items.length > 3 && (
+                                  <p className="text-xs text-gray-400 italic">...and {cat.items.length - 3} more</p>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="p-4">
                             <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
                               cat.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
