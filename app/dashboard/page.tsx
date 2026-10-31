@@ -13,12 +13,12 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Latest salary fetch karo (jo bhi sabse aakhir mein save hui ho)
+  // Latest salary fetch karo (Month ke hisaab se)
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+    .order('month', { ascending: false })
     .limit(1)
     .maybeSingle()
 

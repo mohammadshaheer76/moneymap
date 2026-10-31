@@ -7,15 +7,13 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Dashboard jaisa hi current month logic use karo
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-
+  // Latest salary allocation fetch karo (by month)
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, month, net_salary, needs_amount, wants_amount, savings_amount')
     .eq('user_id', user.id)
-    .eq('month', currentMonth)
+    .order('month', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (!allocation) {

@@ -15,12 +15,12 @@ export async function saveExpense(data: {
 
   if (!user) return { error: 'Not logged in' }
 
-  // Latest salary allocation fetch karo
+  // Latest salary allocation fetch karo (by month)
   const { data: allocation, error: allocError } = await supabase
     .from('salary_allocations')
     .select('id')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+    .order('month', { ascending: false })
     .limit(1)
     .single()
 
