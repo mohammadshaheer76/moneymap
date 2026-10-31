@@ -19,6 +19,7 @@ export default function Nav() {
     { href: '/salary', label: 'Salary', icon: '💵' },
     { href: '/expenses', label: 'Expenses', icon: '🛒' },
     { href: '/inventory', label: 'Inventory', icon: '📦' },
+    { href: '/reports', label: 'Reports', icon: '📈' },
   ]
 
   return (
