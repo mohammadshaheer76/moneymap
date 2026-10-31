@@ -62,6 +62,22 @@ export default async function ReportsPage() {
   const sortedCategories = Object.values(categoryTotals).sort((a, b) => b.total - a.total)
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
+
+  // Chart Data Calculation
+  const totalSpent = needs_spent + wants_spent + savings_spent;
+  const needsPct = totalSpent > 0 ? (needs_spent / totalSpent) * 100 : 0;
+  const wantsPct = totalSpent > 0 ? (wants_spent / totalSpent) * 100 : 0;
+  const savingsPct = totalSpent > 0 ? (savings_spent / totalSpent) * 100 : 0;
+
+  // SVG conic-gradient style pie chart ke liye
+  const pieChartStyle = {
+    background: `conic-gradient(
+      #3b82f6 0% ${needsPct}%, 
+      #f59e0b ${needsPct}% ${needsPct + wantsPct}%, 
+      #10b981 ${needsPct + wantsPct}% 100%
+    )`
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white space-y-8">
       <div>
@@ -87,6 +103,50 @@ export default async function ReportsPage() {
           <p className="text-xs text-purple-600 dark:text-purple-400 mb-1">Total Spent</p>
           <p className="font-bold text-purple-700 dark:text-purple-300">{formatPKR(needs_spent + wants_spent + savings_spent)}</p>
         </div>
+      </div>
+
+
+      {/* Pie Chart Section */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm mb-8">
+        <h3 className="font-bold text-lg mb-6">Spending Breakdown</h3>
+        {totalSpent === 0 ? (
+          <p className="text-gray-500">No expenses to show.</p>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-10">
+            {/* The Chart */}
+            <div className="relative w-48 h-48 rounded-full flex items-center justify-center shadow-inner" style={pieChartStyle}>
+              <div className="w-32 h-32 bg-white dark:bg-gray-900 rounded-full flex flex-col items-center justify-center shadow-lg">
+                <span className="text-xs text-gray-500">Total</span>
+                <span className="font-bold text-lg">{formatPKR(totalSpent)}</span>
+              </div>
+            </div>
+            
+            {/* Legend */}
+            <div className="space-y-4 flex-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span className="text-sm font-medium">Needs</span>
+                </div>
+                <span className="text-sm font-bold">{Math.round(needsPct)}%</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                  <span className="text-sm font-medium">Wants</span>
+                </div>
+                <span className="text-sm font-bold">{Math.round(wantsPct)}%</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span className="text-sm font-medium">Savings</span>
+                </div>
+                <span className="text-sm font-bold">{Math.round(savingsPct)}%</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detailed List */}
