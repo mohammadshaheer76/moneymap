@@ -6,8 +6,16 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  // Pehle latest allocation dhoondo (chahe kisi bhi mahine ki ho)
+  const { data: latestAlloc } = await supabase
+    .from('salary_allocations')
+    .select('month')
+    .eq('user_id', user.id)
+    .order('month', { ascending: false })
+    .limit(1)
+    .single()
+
+  const currentMonth = latestAlloc?.month || new Date().toISOString().split('T')[0].slice(0, 7) + '-01'
 
   const { data: allocation } = await supabase
     .from('salary_allocations')
