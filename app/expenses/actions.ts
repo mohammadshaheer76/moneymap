@@ -16,13 +16,13 @@ export async function saveExpense(data: {
   if (!user) return { error: 'Not logged in' }
 
   const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
   const { data: allocation, error: allocError } = await supabase
     .from('salary_allocations')
     .select('id')
     .eq('user_id', user.id)
-    .eq('month', currentMonth)
+    .like('month', `${currentYearMonth}-%`)
     .single()
 
   if (allocError || !allocation) {

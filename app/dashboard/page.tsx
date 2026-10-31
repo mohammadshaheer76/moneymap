@@ -14,13 +14,15 @@ export default async function DashboardPage() {
     .maybeSingle()
 
   const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  // Format: YYYY-MM
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
+  // Supabase mein 'like' query use karo taake kisi bhi din ki salary mil jaye us mahine ki
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
     .eq('user_id', user.id)
-    .eq('month', currentMonth)
+    .like('month', `${currentYearMonth}-%`)
     .maybeSingle()
 
   let summary = null
