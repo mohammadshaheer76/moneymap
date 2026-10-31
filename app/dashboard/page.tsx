@@ -13,16 +13,13 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  const now = new Date()
-  // Format: YYYY-MM
-  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  // Supabase mein 'like' query use karo taake kisi bhi din ki salary mil jaye us mahine ki
+  // Latest salary fetch karo (jo bhi sabse aakhir mein save hui ho)
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
     .eq('user_id', user.id)
-    .like('month', `${currentYearMonth}-%`)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   let summary = null
