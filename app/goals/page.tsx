@@ -86,8 +86,7 @@ export default function GoalsPage() {
       
     if (goalError) return alert("Error: " + goalError.message)
 
-    // 2. Add as Expense (So it reflects in Reports)
-    // Get latest allocation
+    // 2. Expense Create karo taake Reports aur Dashboard update ho
     const { data: alloc } = await supabase
       .from('salary_allocations')
       .select('id')
@@ -96,25 +95,43 @@ export default function GoalsPage() {
       .limit(1)
       .maybeSingle()
 
-    if (alloc) {
-      // Find or create a "Savings Goal" category
-      let { data: cat } = await supabase.from('categories').select('id').eq('name', 'Savings Goal').eq('type', 'savings').maybeSingle()
-      
-      if (!cat) {
-        const { data: newCat } = await supabase.from('categories').insert({ name: 'Savings Goal', type: 'savings', is_default: true }).select('id').single()
-        cat = newCat
-      }
+    if (!alloc) {
+      alert("Goal updated, but no salary found to deduct from. Please save your salary first.")
+      fetchGoals()
+      return
+    }
 
-      if (cat) {
-        await supabase.from('expenses').insert({
-          user_id: user.id,
-          allocation_id: alloc.id,
-          category_id: cat.id,
-          amount: amount,
-          description: `Saved for ${goalName}`,
-          expense_date: new Date().toISOString().split('T')[0],
-        })
-      }
+    // "Savings Goal" category dhoondo
+    let { data: cat } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('name', 'Savings Goal')
+      .eq('type', 'savings')
+      .maybeSingle()
+    
+    // Agar category nahi mili toh error alert do
+    if (!cat) {
+      alert("System error: 'Savings Goal' category not found in database. Please add it via SQL.")
+      fetchGoals()
+      return
+    }
+
+    // Expense Insert karo
+    const { error: expError } = await supabase
+      .from('expenses')
+      .insert({
+        user_id: user.id,
+        allocation_id: alloc.id,
+        category_id: cat.id,
+        amount: amount,
+        description: `Saved for ${goalName}`,
+        expense_date: new Date().toISOString().split('T')[0],
+      })
+
+    if (expError) {
+      alert("Goal updated, but failed to create expense entry: " + expError.message)
+    } else {
+      alert(`Successfully added PKR ${amount} to "${goalName}"!`)
     }
 
     fetchGoals()
