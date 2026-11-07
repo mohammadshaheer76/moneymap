@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: { month?: string } }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -13,14 +13,27 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Latest salary allocation fetch karo (by month)
-  const { data: allocation } = await supabase
+  // Saare available months fetch karo (dropdown ke liye)
+  const { data: allAllocations } = await supabase
     .from('salary_allocations')
-    .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
+    .select('month')
     .eq('user_id', user.id)
     .order('month', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+
+  // Default month: URL se lo, agar nahi hai toh latest month
+  const selectedMonth = searchParams.month || (allAllocations && allAllocations.length > 0 ? allAllocations[0].month : null)
+
+  // Us selected month ki allocation fetch karo
+  let allocation = null
+  if (selectedMonth) {
+    const { data } = await supabase
+      .from('salary_allocations')
+      .select('id, user_id, month, net_salary, needs_percent, wants_percent, savings_percent, needs_amount, wants_amount, savings_amount, rule_id, created_at')
+      .eq('user_id', user.id)
+      .eq('month', selectedMonth)
+      .maybeSingle()
+    allocation = data
+  }
 
 
   // Fetch Active Goals
@@ -83,6 +96,28 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Month Selector */}
+      {allAllocations && allAllocations.length > 0 && (
+        <div className="flex justify-end mb-4">
+          <form className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Viewing Month:</label>
+            <select 
+              name="month"
+              defaultValue={selectedMonth || ''}
+              className="p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+              // Note: Next.js Server Component mein onChange nahi chalta, isliye form submit use karenge
+            >
+              {allAllocations.map((alloc: any) => (
+                <option key={alloc.month} value={alloc.month}>
+                  {new Date(alloc.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Go</button>
+          </form>
+        </div>
+      )}
+
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
         <div className="relative">
