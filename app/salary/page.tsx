@@ -36,6 +36,12 @@ export default function SalaryPage() {
         .maybeSingle()
 
       if (data) {
+        setMonth(data.month)
+        setSalary(String(data.net_salary))
+        setNeeds(data.needs_percent)
+        setWants(data.wants_percent)
+        setSavings(data.savings_percent)
+        setIsEdit(true)
         setSalary(String(data.net_salary))
         setNeeds(data.needs_percent)
         setWants(data.wants_percent)
