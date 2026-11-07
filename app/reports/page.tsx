@@ -7,7 +7,7 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Latest salary allocation fetch karo (by month)
+  // Latest salary allocation fetch karo
   const { data: allocation } = await supabase
     .from('salary_allocations')
     .select('id, month, net_salary, needs_amount, wants_amount, savings_amount')
@@ -32,156 +32,194 @@ export default async function ReportsPage() {
     .eq('allocation_id', allocation.id)
     .order('expense_date', { ascending: false })
 
-  // Calculate Totals
+  // Data calculation
   let needs_spent = 0, wants_spent = 0, savings_spent = 0
   
-  const categoryTotals: Record<string, { name: string; type: string; total: number; items: any[] }> = {}
-  
+  // Grouping: Type -> Category -> Items
+  const groupedData: Record<string, Record<string, { total: number, items: any[] }>> = {
+    needs: {},
+    wants: {},
+    savings: {}
+  }
+
   for (const exp of expenses || []) {
     const cat = exp.categories as any
     if (!cat) continue
     const amt = Number(exp.amount)
-    
-    if (cat.type === 'needs') needs_spent += amt
-    else if (cat.type === 'wants') wants_spent += amt
-    else if (cat.type === 'savings') savings_spent += amt
+    const type = cat.type as 'needs' | 'wants' | 'savings'
 
-    if (!categoryTotals[cat.name]) {
-      categoryTotals[cat.name] = { name: cat.name, type: cat.type, total: 0, items: [] }
+    if (type === 'needs') needs_spent += amt
+    else if (type === 'wants') wants_spent += amt
+    else if (type === 'savings') savings_spent += amt
+
+    if (!groupedData[type][cat.name]) {
+      groupedData[type][cat.name] = { total: 0, items: [] }
     }
-    categoryTotals[cat.name].total += amt
-    categoryTotals[cat.name].items.push({
+    groupedData[type][cat.name].total += amt
+    groupedData[type][cat.name].items.push({
       desc: exp.description || 'No description',
       amount: amt,
       date: exp.expense_date
     })
   }
 
-  const sortedCategories = Object.values(categoryTotals).sort((a, b) => b.total - a.total)
+  const totalSpent = needs_spent + wants_spent + savings_spent
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
+  // Helper function to generate conic-gradient string
+  const generateConicGradient = (data: Record<string, { total: number }>, colors: string[]) => {
+    let currentPct = 0
+    const stops: string[] = []
+    
+    Object.values(data).sort((a, b) => b.total - a.total).forEach((item, i) => {
+      const pct = (item.total / Object.values(data).reduce((sum, d) => sum + d.total, 0)) * 100
+      const color = colors[i % colors.length]
+      stops.push(`${color} ${currentPct}% ${currentPct + pct}%`)
+      currentPct += pct
+    })
+    
+    return `conic-gradient(${stops.join(', ')})`
+  }
 
-  // Chart Data Calculation
-  const totalSpent = needs_spent + wants_spent + savings_spent;
-  const needsPct = totalSpent > 0 ? (needs_spent / totalSpent) * 100 : 0;
-  const wantsPct = totalSpent > 0 ? (wants_spent / totalSpent) * 100 : 0;
-  const savingsPct = totalSpent > 0 ? (savings_spent / totalSpent) * 100 : 0;
+  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e']
 
-  // SVG conic-gradient style pie chart ke liye
-  const pieChartStyle = {
+  // Main Overall Chart
+  const mainNeedsPct = totalSpent > 0 ? (needs_spent / totalSpent) * 100 : 0
+  const mainWantsPct = totalSpent > 0 ? (wants_spent / totalSpent) * 100 : 0
+  const mainSavingsPct = totalSpent > 0 ? (savings_spent / totalSpent) * 100 : 0
+
+  const mainChartStyle = {
     background: `conic-gradient(
-      #3b82f6 0% ${needsPct}%, 
-      #f59e0b ${needsPct}% ${needsPct + wantsPct}%, 
-      #10b981 ${needsPct + wantsPct}% 100%
+      #3b82f6 0% ${mainNeedsPct}%, 
+      #f59e0b ${mainNeedsPct}% ${mainNeedsPct + mainWantsPct}%, 
+      #10b981 ${mainNeedsPct + mainWantsPct}% 100%
     )`
-  };
+  }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white space-y-8">
+    <div className="max-w-5xl mx-auto py-8 px-4 text-gray-900 dark:text-white space-y-12">
       <div>
         <h1 className="text-3xl font-bold mb-2">Detailed Reports</h1>
         <p className="text-gray-600 dark:text-gray-400">Full breakdown of your spending for {new Date(allocation.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}.</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-          <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Needs Spent</p>
-          <p className="font-bold text-blue-700 dark:text-blue-300">{formatPKR(needs_spent)}</p>
-        </div>
-        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-          <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">Wants Spent</p>
-          <p className="font-bold text-amber-700 dark:text-amber-300">{formatPKR(wants_spent)}</p>
-        </div>
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">Savings Spent</p>
-          <p className="font-bold text-emerald-700 dark:text-emerald-300">{formatPKR(savings_spent)}</p>
-        </div>
-        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-          <p className="text-xs text-purple-600 dark:text-purple-400 mb-1">Total Spent</p>
-          <p className="font-bold text-purple-700 dark:text-purple-300">{formatPKR(needs_spent + wants_spent + savings_spent)}</p>
-        </div>
-      </div>
-
-
-      {/* Pie Chart Section */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm mb-8">
-        <h3 className="font-bold text-lg mb-6">Spending Breakdown</h3>
+      {/* Main Overall Breakdown */}
+      <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-8 shadow-sm">
+        <h2 className="text-xl font-bold mb-8">Overall Breakdown</h2>
         {totalSpent === 0 ? (
           <p className="text-gray-500">No expenses to show.</p>
         ) : (
-          <div className="flex flex-col md:flex-row items-center gap-10">
-            {/* The Chart */}
-            <div className="relative w-48 h-48 rounded-full flex items-center justify-center shadow-inner" style={pieChartStyle}>
-              <div className="w-32 h-32 bg-white dark:bg-gray-900 rounded-full flex flex-col items-center justify-center shadow-lg">
-                <span className="text-xs text-gray-500">Total</span>
-                <span className="font-bold text-lg">{formatPKR(totalSpent)}</span>
+          <div className="flex flex-col md:flex-row items-center gap-12">
+            <div className="relative w-56 h-56 rounded-full flex items-center justify-center shadow-inner shrink-0" style={mainChartStyle}>
+              <div className="w-40 h-40 bg-white dark:bg-gray-900 rounded-full flex flex-col items-center justify-center shadow-lg">
+                <span className="text-sm text-gray-500 mb-1">Total Spent</span>
+                <span className="font-bold text-xl">{formatPKR(totalSpent)}</span>
               </div>
             </div>
             
-            {/* Legend */}
-            <div className="space-y-4 flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-sm font-medium">Needs</span>
+            <div className="space-y-4 flex-1 w-full">
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                  <span className="text-lg font-medium">Needs</span>
                 </div>
-                <span className="text-sm font-bold">{Math.round(needsPct)}%</span>
+                <div className="text-right">
+                  <span className="text-lg font-bold">{Math.round(mainNeedsPct)}%</span>
+                  <p className="text-sm text-gray-500">{formatPKR(needs_spent)}</p>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                  <span className="text-sm font-medium">Wants</span>
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full bg-amber-500"></div>
+                  <span className="text-lg font-medium">Wants</span>
                 </div>
-                <span className="text-sm font-bold">{Math.round(wantsPct)}%</span>
+                <div className="text-right">
+                  <span className="text-lg font-bold">{Math.round(mainWantsPct)}%</span>
+                  <p className="text-sm text-gray-500">{formatPKR(wants_spent)}</p>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                  <span className="text-sm font-medium">Savings</span>
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
+                  <span className="text-lg font-medium">Savings</span>
                 </div>
-                <span className="text-sm font-bold">{Math.round(savingsPct)}%</span>
+                <div className="text-right">
+                  <span className="text-lg font-bold">{Math.round(mainSavingsPct)}%</span>
+                  <p className="text-sm text-gray-500">{formatPKR(savings_spent)}</p>
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Detailed List */}
-      <div className="space-y-6">
-        {sortedCategories.length === 0 ? (
-          <p className="text-center text-gray-500">No expenses found for this month.</p>
-        ) : (
-          sortedCategories.map((cat) => (
-            <div key={cat.name} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+      {/* Category-Wise Breakdowns */}
+      {totalSpent > 0 && (
+        <div className="space-y-12">
+          <h2 className="text-2xl font-bold border-b border-gray-200 dark:border-gray-800 pb-4">Category Breakdown</h2>
+
+          {(['needs', 'wants', 'savings'] as const).map((type) => {
+            const typeData = groupedData[type]
+            const typeTotal = Object.values(typeData).reduce((sum, cat) => sum + cat.total, 0)
+            if (typeTotal === 0) return null
+
+            return (
+              <div key={type} className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <h3 className="font-bold text-lg">{cat.name}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
-                    cat.type === 'needs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                    cat.type === 'wants' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
-                    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                  }`}>
-                    {cat.type}
-                  </span>
+                  <h3 className="text-xl font-bold capitalize">{type} Spending</h3>
+                  <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium">{formatPKR(typeTotal)}</span>
                 </div>
-                <p className="font-bold">{formatPKR(cat.total)}</p>
-              </div>
-              <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                {cat.items.map((item, idx) => (
-                  <div key={idx} className="p-4 flex justify-between items-center text-sm">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{item.desc}</p>
-                      <p className="text-xs text-gray-500">{new Date(item.date).toLocaleDateString()}</p>
-                    </div>
-                    <p className="font-semibold">{formatPKR(item.amount)}</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {/* Sub Pie Chart */}
+                  <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm flex flex-col items-center">
+                     <div className="relative w-40 h-40 rounded-full flex items-center justify-center mb-6" style={{ background: generateConicGradient(typeData, COLORS) }}>
+                        <div className="w-28 h-28 bg-white dark:bg-gray-900 rounded-full flex items-center justify-center shadow-md">
+                          <span className="font-bold text-lg">{typeTotal > 0 ? '100%' : '0%'}</span>
+                        </div>
+                     </div>
+                     {/* Legend */}
+                     <div className="w-full space-y-2">
+                        {Object.entries(typeData).sort((a, b) => b[1].total - a[1].total).map(([catName, data], idx) => (
+                          <div key={catName} className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                              <span className="font-medium">{catName}</span>
+                            </div>
+                            <span className="font-bold">{Math.round((data.total / typeTotal) * 100)}%</span>
+                          </div>
+                        ))}
+                     </div>
                   </div>
-                ))}
+
+                  {/* List of Items */}
+                  <div className="md:col-span-2 space-y-4">
+                    {Object.entries(typeData).sort((a, b) => b[1].total - a[1].total).map(([catName, data]) => (
+                      <div key={catName} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+                          <h4 className="font-bold text-gray-900 dark:text-white">{catName}</h4>
+                          <span className="font-bold text-gray-900 dark:text-white">{formatPKR(data.total)}</span>
+                        </div>
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                          {data.items.sort((a,b) => b.amount - a.amount).map((item, idx) => (
+                            <div key={idx} className="p-4 flex justify-between items-center text-sm">
+                              <div>
+                                <p className="font-medium text-gray-900 dark:text-white">{item.desc}</p>
+                                <p className="text-xs text-gray-500">{new Date(item.date).toLocaleDateString()}</p>
+                              </div>
+                              <p className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.amount)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
