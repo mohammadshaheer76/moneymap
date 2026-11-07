@@ -67,26 +67,57 @@ export default function GoalsPage() {
     fetchGoals()
   }
 
-  // Add money to goal logic
-  const handleAddMoney = async (id: string, currentSaved: number) => {
-    const amountStr = prompt("Kitna paisa is goal mein add karna hai? (e.g. 5000)")
+  // Add money to goal AND create an expense entry
+  const handleAddMoney = async (id: string, currentSaved: number, goalName: string) => {
+    const amountStr = prompt(`How much do you want to add to "${goalName}"? (e.g. 5000)`)
     if (!amountStr) return
     const amount = Number(amountStr)
     if (isNaN(amount) || amount <= 0) return alert("Please enter a valid number.")
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // 1. Update Goal
     const newSaved = Number(currentSaved) + amount
-    
-    // Update goal
-    const { error } = await supabase
+    const { error: goalError } = await supabase
       .from('goals')
       .update({ saved_amount: newSaved })
       .eq('id', id)
       
-    if (error) {
-      alert("Error: " + error.message)
-    } else {
-      fetchGoals()
+    if (goalError) return alert("Error: " + goalError.message)
+
+    // 2. Add as Expense (So it reflects in Reports)
+    // Get latest allocation
+    const { data: alloc } = await supabase
+      .from('salary_allocations')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('month', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (alloc) {
+      // Find or create a "Savings Goal" category
+      let { data: cat } = await supabase.from('categories').select('id').eq('name', 'Savings Goal').eq('type', 'savings').maybeSingle()
+      
+      if (!cat) {
+        const { data: newCat } = await supabase.from('categories').insert({ name: 'Savings Goal', type: 'savings', is_default: true }).select('id').single()
+        cat = newCat
+      }
+
+      if (cat) {
+        await supabase.from('expenses').insert({
+          user_id: user.id,
+          allocation_id: alloc.id,
+          category_id: cat.id,
+          amount: amount,
+          description: `Saved for ${goalName}`,
+          expense_date: new Date().toISOString().split('T')[0],
+        })
+      }
     }
+
+    fetchGoals()
   }
 
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
@@ -200,7 +231,7 @@ export default function GoalsPage() {
                   <div className="flex justify-between items-center mt-4">
                     <p className="text-sm text-gray-500 font-medium">{Math.round(progress)}% saved</p>
                     <button 
-                      onClick={() => handleAddMoney(goal.id, goal.saved_amount)}
+                      onClick={() => handleAddMoney(goal.id, goal.saved_amount, goal.name)}
                       className="text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg font-medium transition-colors"
                     >
                       + Add Money
