@@ -77,7 +77,7 @@ export default async function DashboardPage() {
   }
 
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
-  const percent = (spent: number, budget: number) => (budget > 0 ? Math.min(100, (spent / budget) * 100) : 0)
+  const percent = (spent: number, budget: number) => (budget > 0 ? (spent / budget) * 100 : 0)
   const remaining = summary ? summary.total_income - (summary.needs_spent + summary.wants_spent + summary.savings_spent) : 0
   const totalSpentPct = summary ? Math.round(((summary.needs_spent + summary.wants_spent + summary.savings_spent) / summary.total_income) * 100) : 0
 
@@ -220,6 +220,42 @@ export default async function DashboardPage() {
                           className={`h-2 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`} 
                           style={{ width: `${progress}%` }} 
                         />
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>{formatPKR(Number(goal.saved_amount))}</span>
+                        <span>{formatPKR(Number(goal.target_amount))}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+
+          {/* MY SAVING GOALS */}
+          {goals && goals.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🎯</span>
+                  <h3 className="font-bold text-gray-900 dark:text-white">My Saving Goals</h3>
+                </div>
+                <Link href="/goals" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                  View All →
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {goals.map((goal: any) => {
+                  const progress = Math.min(100, (Number(goal.saved_amount) / Number(goal.target_amount)) * 100);
+                  return (
+                    <div key={goal.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="font-bold text-gray-900 dark:text-white">{goal.name}</p>
+                        <span className="text-sm font-bold text-blue-500">{Math.round(progress)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
                       </div>
                       <div className="flex justify-between text-xs text-gray-500">
                         <span>{formatPKR(Number(goal.saved_amount))}</span>
