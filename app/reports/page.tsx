@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export default function ReportsPage() {
   const supabase = createClient()
   const [selectedMonth, setSelectedMonth] = useState('')
   const [availableMonths, setAvailableMonths] = useState<any[]>([])
-  const [reportData, setReportData] = useState<any[]>([])
-  const [monthlySummary, setMonthlySummary] = useState<any>(null)
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [summary, setSummary] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  // 1. Available months fetch karo
   useEffect(() => {
     const fetchMonths = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +35,6 @@ export default function ReportsPage() {
     fetchMonths()
   }, [supabase])
 
-  // 2. Selected month ka data fetch karo
   useEffect(() => {
     if (!selectedMonth) return
 
@@ -44,7 +43,6 @@ export default function ReportsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Salary fetch karo
       const { data: allocation } = await supabase
         .from('salary_allocations')
         .select('*')
@@ -52,19 +50,35 @@ export default function ReportsPage() {
         .eq('month', selectedMonth)
         .maybeSingle()
 
-      setMonthlySummary(allocation)
-
       if (allocation) {
-        // Expenses aur Categories fetch karo
         const { data: exps } = await supabase
           .from('expenses')
           .select('*, categories(name, type)')
           .eq('allocation_id', allocation.id)
           .order('expense_date', { ascending: true })
           
-        setReportData(exps || [])
+        const expsData = exps || []
+        setExpenses(expsData)
+
+        let needs = 0, wants = 0, savings = 0
+        expsData.forEach(exp => {
+          const type = exp.categories?.type
+          const amt = Number(exp.amount)
+          if (type === 'needs') needs += amt
+          else if (type === 'wants') wants += amt
+          else if (type === 'savings') savings += amt
+        })
+
+        setSummary({
+          allocation,
+          needs,
+          wants,
+          savings,
+          total: needs + wants + savings
+        })
       } else {
-        setReportData([])
+        setExpenses([])
+        setSummary(null)
       }
       setLoading(false)
     }
@@ -73,72 +87,61 @@ export default function ReportsPage() {
 
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
-  // PDF Download Function
   const downloadPDF = () => {
-    if (!monthlySummary) return
+    if (!summary || !summary.allocation) return
 
     const doc = new jsPDF()
     const monthName = new Date(selectedMonth).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-    // --- Header Section ---
     doc.setFontSize(22)
-    doc.setTextColor(41, 128, 185) // Blue
-    doc.text('MoneyMap', 14, 20)
+    doc.setTextColor(41, 128, 185)
+    doc.text('MoneyMap Report', 14, 20)
     
     doc.setFontSize(12)
     doc.setTextColor(100)
-    doc.text(`Monthly Financial Report - ${monthName}`, 14, 28)
+    doc.text(`Financial Summary - ${monthName}`, 14, 28)
 
-    // --- Summary Section ---
-    doc.setFontSize(12)
     doc.setTextColor(0)
-    doc.text('Budget Summary:', 14, 40)
-    
     doc.setFontSize(10)
-    doc.text(`Net Salary: ${formatPKR(monthlySummary.net_salary)}`, 14, 48)
-    doc.text(`Needs Budget: ${formatPKR(monthlySummary.needs_amount)}`, 14, 55)
-    doc.text(`Wants Budget: ${formatPKR(monthlySummary.wants_amount)}`, 14, 62)
-    doc.text(`Savings Budget: ${formatPKR(monthlySummary.savings_amount)}`, 14, 69)
+    doc.text(`Net Salary: ${formatPKR(summary.allocation.net_salary)}`, 14, 40)
+    doc.text(`Total Expenses: ${formatPKR(summary.total)}`, 14, 46)
 
-    // --- Table Section ---
-    const tableData = reportData.map(exp => [
+    const tableData = expenses.map(exp => [
       new Date(exp.expense_date).toLocaleDateString('en-GB'),
-      exp.categories?.type?.toUpperCase() || '-',
       exp.categories?.name || '-',
       exp.description || '-',
       formatPKR(exp.amount)
     ])
 
     autoTable(doc, {
-      head: [['Date', 'Type', 'Category', 'Description', 'Amount']],
+      head: [['Date', 'Category', 'Description', 'Amount']],
       body: tableData,
-      startY: 80,
+      startY: 55,
       theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Blue header
-      alternateRowStyles: { fillColor: [245, 245, 245] }
+      headStyles: { fillColor: [41, 128, 185] }
     })
 
-    // --- Footer ---
-    const finalY = (doc as any).lastAutoTable.finalY || 80
-    doc.setFontSize(10)
-    doc.text('Generated by MoneyMap', 14, finalY + 15)
-
-    // Save PDF
     doc.save(`MoneyMap_Report_${monthName.replace(' ', '_')}.pdf`)
   }
 
+  const COLORS = ['#3b82f6', '#f59e0b', '#10b981']
+
+  const pieData = summary ? [
+    { name: 'Needs', value: summary.needs },
+    { name: 'Wants', value: summary.wants },
+    { name: 'Savings', value: summary.savings },
+  ].filter(d => d.value > 0) : []
+
   if (availableMonths.length === 0 && !loading) {
-    return <div className="text-center py-20 text-gray-500">No salary data found to generate reports.</div>
+    return <div className="text-center py-20 text-gray-500">No salary data found.</div>
   }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
-      {/* Header and Dropdown */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reports</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Download your monthly financial summary.</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">View your monthly expense breakdown.</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -156,7 +159,7 @@ export default function ReportsPage() {
 
           <button 
             onClick={downloadPDF}
-            disabled={!monthlySummary || loading}
+            disabled={!summary || loading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             <span>⬇️</span> Download PDF
@@ -164,46 +167,59 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Report Preview */}
       {loading ? (
         <div className="text-gray-500">Loading report data...</div>
-      ) : !monthlySummary ? (
+      ) : !summary ? (
         <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
           <p className="text-gray-500">Koi data nahi mila is mahine ke liye.</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm overflow-x-auto">
-          <h2 className="text-lg font-bold mb-4">Expense Details</h2>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-              <tr>
-                <th className="p-3 rounded-tl-lg">Date</th>
-                <th className="p-3">Category</th>
-                <th className="p-3">Description</th>
-                <th className="p-3 rounded-tr-lg text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportData.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-6 text-center text-gray-500">No expenses recorded this month.</td>
-                </tr>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+            <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">Expense Breakdown</h2>
+            <div className="h-64">
+              {pieData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-500 text-sm">No expenses yet</div>
               ) : (
-                reportData.map((exp, i) => (
-                  <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                    <td className="p-3 whitespace-nowrap">{new Date(exp.expense_date).toLocaleDateString('en-GB')}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-xs font-medium">
-                        {exp.categories?.name}
-                      </span>
-                    </td>
-                    <td className="p-3">{exp.description || '-'}</td>
-                    <td className="p-3 text-right font-medium">{formatPKR(exp.amount)}</td>
-                  </tr>
-                ))
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: any) => formatPKR(Number(value) || 0)} />
+                    <Legend verticalAlign="bottom" height={36}/>
+                  </PieChart>
+                </ResponsiveContainer>
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800">
+              <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">Needs Spent</p>
+              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mt-1">{formatPKR(summary.needs)}</p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-800">
+              <p className="text-amber-600 dark:text-amber-400 text-sm font-medium">Wants Spent</p>
+              <p className="text-2xl font-bold text-amber-900 dark:text-amber-100 mt-1">{formatPKR(summary.wants)}</p>
+            </div>
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-800">
+              <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Savings Spent</p>
+              <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100 mt-1">{formatPKR(summary.savings)}</p>
+            </div>
+          </div>
+
         </div>
       )}
     </div>
