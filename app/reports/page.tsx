@@ -1,223 +1,209 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
+'use client'
 
-export default async function ReportsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
-  // Latest salary allocation fetch karo
-  const { data: allocation } = await supabase
-    .from('salary_allocations')
-    .select('id, month, net_salary, needs_amount, wants_amount, savings_amount')
-    .eq('user_id', user.id)
-    .order('month', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+export default function ReportsPage() {
+  const supabase = createClient()
+  const [selectedMonth, setSelectedMonth] = useState('')
+  const [availableMonths, setAvailableMonths] = useState<any[]>([])
+  const [reportData, setReportData] = useState<any[]>([])
+  const [monthlySummary, setMonthlySummary] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  if (!allocation) {
-    return (
-      <div className="max-w-4xl mx-auto py-12 px-4 text-center">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">No Data Available</h1>
-        <p className="text-gray-500 mb-6">Please enter your salary for this month first.</p>
-        <Link href="/salary" className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg">Enter Salary</Link>
-      </div>
-    )
-  }
+  // 1. Available months fetch karo
+  useEffect(() => {
+    const fetchMonths = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-  const { data: expenses } = await supabase
-    .from('expenses')
-    .select('amount, category_id, description, expense_date, categories(name, type)')
-    .eq('allocation_id', allocation.id)
-    .order('expense_date', { ascending: false })
+      const { data: allocations } = await supabase
+        .from('salary_allocations')
+        .select('month')
+        .eq('user_id', user.id)
+        .order('month', { ascending: false })
 
-  // Data calculation
-  let needs_spent = 0, wants_spent = 0, savings_spent = 0
-  
-  // Grouping: Type -> Category -> Items
-  const groupedData: Record<string, Record<string, { total: number, items: any[] }>> = {
-    needs: {},
-    wants: {},
-    savings: {}
-  }
-
-  for (const exp of expenses || []) {
-    const cat = exp.categories as any
-    if (!cat) continue
-    const amt = Number(exp.amount)
-    const type = cat.type as 'needs' | 'wants' | 'savings'
-
-    if (type === 'needs') needs_spent += amt
-    else if (type === 'wants') wants_spent += amt
-    else if (type === 'savings') savings_spent += amt
-
-    if (!groupedData[type][cat.name]) {
-      groupedData[type][cat.name] = { total: 0, items: [] }
+      if (allocations && allocations.length > 0) {
+        setAvailableMonths(allocations)
+        setSelectedMonth(allocations[0].month)
+      } else {
+        setLoading(false)
+      }
     }
-    groupedData[type][cat.name].total += amt
-    groupedData[type][cat.name].items.push({
-      desc: exp.description || 'No description',
-      amount: amt,
-      date: exp.expense_date
-    })
-  }
+    fetchMonths()
+  }, [supabase])
 
-  const totalSpent = needs_spent + wants_spent + savings_spent
+  // 2. Selected month ka data fetch karo
+  useEffect(() => {
+    if (!selectedMonth) return
+
+    const fetchReportData = async () => {
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Salary fetch karo
+      const { data: allocation } = await supabase
+        .from('salary_allocations')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month', selectedMonth)
+        .maybeSingle()
+
+      setMonthlySummary(allocation)
+
+      if (allocation) {
+        // Expenses aur Categories fetch karo
+        const { data: exps } = await supabase
+          .from('expenses')
+          .select('*, categories(name, type)')
+          .eq('allocation_id', allocation.id)
+          .order('expense_date', { ascending: true })
+          
+        setReportData(exps || [])
+      } else {
+        setReportData([])
+      }
+      setLoading(false)
+    }
+    fetchReportData()
+  }, [selectedMonth, supabase])
+
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
-  // Helper function to generate conic-gradient string
-  const generateConicGradient = (data: Record<string, { total: number }>, colors: string[]) => {
-    let currentPct = 0
-    const stops: string[] = []
+  // PDF Download Function
+  const downloadPDF = () => {
+    if (!monthlySummary) return
+
+    const doc = new jsPDF()
+    const monthName = new Date(selectedMonth).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+    // --- Header Section ---
+    doc.setFontSize(22)
+    doc.setTextColor(41, 128, 185) // Blue
+    doc.text('MoneyMap', 14, 20)
     
-    Object.values(data).sort((a, b) => b.total - a.total).forEach((item, i) => {
-      const pct = (item.total / Object.values(data).reduce((sum, d) => sum + d.total, 0)) * 100
-      const color = colors[i % colors.length]
-      stops.push(`${color} ${currentPct}% ${currentPct + pct}%`)
-      currentPct += pct
+    doc.setFontSize(12)
+    doc.setTextColor(100)
+    doc.text(`Monthly Financial Report - ${monthName}`, 14, 28)
+
+    // --- Summary Section ---
+    doc.setFontSize(12)
+    doc.setTextColor(0)
+    doc.text('Budget Summary:', 14, 40)
+    
+    doc.setFontSize(10)
+    doc.text(`Net Salary: ${formatPKR(monthlySummary.net_salary)}`, 14, 48)
+    doc.text(`Needs Budget: ${formatPKR(monthlySummary.needs_amount)}`, 14, 55)
+    doc.text(`Wants Budget: ${formatPKR(monthlySummary.wants_amount)}`, 14, 62)
+    doc.text(`Savings Budget: ${formatPKR(monthlySummary.savings_amount)}`, 14, 69)
+
+    // --- Table Section ---
+    const tableData = reportData.map(exp => [
+      new Date(exp.expense_date).toLocaleDateString('en-GB'),
+      exp.categories?.type?.toUpperCase() || '-',
+      exp.categories?.name || '-',
+      exp.description || '-',
+      formatPKR(exp.amount)
+    ])
+
+    autoTable(doc, {
+      head: [['Date', 'Type', 'Category', 'Description', 'Amount']],
+      body: tableData,
+      startY: 80,
+      theme: 'striped',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Blue header
+      alternateRowStyles: { fillColor: [245, 245, 245] }
     })
-    
-    return `conic-gradient(${stops.join(', ')})`
+
+    // --- Footer ---
+    const finalY = (doc as any).lastAutoTable.finalY || 80
+    doc.setFontSize(10)
+    doc.text('Generated by MoneyMap', 14, finalY + 15)
+
+    // Save PDF
+    doc.save(`MoneyMap_Report_${monthName.replace(' ', '_')}.pdf`)
   }
 
-  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e']
-
-  // Main Overall Chart
-  const mainNeedsPct = totalSpent > 0 ? (needs_spent / totalSpent) * 100 : 0
-  const mainWantsPct = totalSpent > 0 ? (wants_spent / totalSpent) * 100 : 0
-  const mainSavingsPct = totalSpent > 0 ? (savings_spent / totalSpent) * 100 : 0
-
-  const mainChartStyle = {
-    background: `conic-gradient(
-      #3b82f6 0% ${mainNeedsPct}%, 
-      #f59e0b ${mainNeedsPct}% ${mainNeedsPct + mainWantsPct}%, 
-      #10b981 ${mainNeedsPct + mainWantsPct}% 100%
-    )`
+  if (availableMonths.length === 0 && !loading) {
+    return <div className="text-center py-20 text-gray-500">No salary data found to generate reports.</div>
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 text-gray-900 dark:text-white space-y-12">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Detailed Reports</h1>
-        <p className="text-gray-600 dark:text-gray-400">Full breakdown of your spending for {new Date(allocation.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}.</p>
+    <div className="max-w-5xl mx-auto space-y-8">
+      {/* Header and Dropdown */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reports</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Download your monthly financial summary.</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <select 
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="p-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+          >
+            {availableMonths.map((alloc) => (
+              <option key={alloc.month} value={alloc.month}>
+                {new Date(alloc.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+              </option>
+            ))}
+          </select>
+
+          <button 
+            onClick={downloadPDF}
+            disabled={!monthlySummary || loading}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            <span>⬇️</span> Download PDF
+          </button>
+        </div>
       </div>
 
-      {/* Main Overall Breakdown */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-8 shadow-sm">
-        <h2 className="text-xl font-bold mb-8">Overall Breakdown</h2>
-        {totalSpent === 0 ? (
-          <p className="text-gray-500">No expenses to show.</p>
-        ) : (
-          <div className="flex flex-col md:flex-row items-center gap-12">
-            <div className="relative w-56 h-56 rounded-full flex items-center justify-center shadow-inner shrink-0" style={mainChartStyle}>
-              <div className="w-40 h-40 bg-white dark:bg-gray-900 rounded-full flex flex-col items-center justify-center shadow-lg">
-                <span className="text-sm text-gray-500 mb-1">Total Spent</span>
-                <span className="font-bold text-xl">{formatPKR(totalSpent)}</span>
-              </div>
-            </div>
-            
-            <div className="space-y-4 flex-1 w-full">
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-                  <span className="text-lg font-medium">Needs</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-lg font-bold">{Math.round(mainNeedsPct)}%</span>
-                  <p className="text-sm text-gray-500">{formatPKR(needs_spent)}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full bg-amber-500"></div>
-                  <span className="text-lg font-medium">Wants</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-lg font-bold">{Math.round(mainWantsPct)}%</span>
-                  <p className="text-sm text-gray-500">{formatPKR(wants_spent)}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full bg-emerald-500"></div>
-                  <span className="text-lg font-medium">Savings</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-lg font-bold">{Math.round(mainSavingsPct)}%</span>
-                  <p className="text-sm text-gray-500">{formatPKR(savings_spent)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Category-Wise Breakdowns */}
-      {totalSpent > 0 && (
-        <div className="space-y-12">
-          <h2 className="text-2xl font-bold border-b border-gray-200 dark:border-gray-800 pb-4">Category Breakdown</h2>
-
-          {(['needs', 'wants', 'savings'] as const).map((type) => {
-            const typeData = groupedData[type]
-            const typeTotal = Object.values(typeData).reduce((sum, cat) => sum + cat.total, 0)
-            if (typeTotal === 0) return null
-
-            return (
-              <div key={type} className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-xl font-bold capitalize">{type} Spending</h3>
-                  <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium">{formatPKR(typeTotal)}</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {/* Sub Pie Chart */}
-                  <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm flex flex-col items-center">
-                     <div className="relative w-40 h-40 rounded-full flex items-center justify-center mb-6" style={{ background: generateConicGradient(typeData, COLORS) }}>
-                        <div className="w-28 h-28 bg-white dark:bg-gray-900 rounded-full flex items-center justify-center shadow-md">
-                          <span className="font-bold text-lg">{typeTotal > 0 ? '100%' : '0%'}</span>
-                        </div>
-                     </div>
-                     {/* Legend */}
-                     <div className="w-full space-y-2">
-                        {Object.entries(typeData).sort((a, b) => b[1].total - a[1].total).map(([catName, data], idx) => (
-                          <div key={catName} className="flex justify-between items-center text-sm">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                              <span className="font-medium">{catName}</span>
-                            </div>
-                            <span className="font-bold">{Math.round((data.total / typeTotal) * 100)}%</span>
-                          </div>
-                        ))}
-                     </div>
-                  </div>
-
-                  {/* List of Items */}
-                  <div className="md:col-span-2 space-y-4">
-                    {Object.entries(typeData).sort((a, b) => b[1].total - a[1].total).map(([catName, data]) => (
-                      <div key={catName} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-                          <h4 className="font-bold text-gray-900 dark:text-white">{catName}</h4>
-                          <span className="font-bold text-gray-900 dark:text-white">{formatPKR(data.total)}</span>
-                        </div>
-                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                          {data.items.sort((a,b) => b.amount - a.amount).map((item, idx) => (
-                            <div key={idx} className="p-4 flex justify-between items-center text-sm">
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">{item.desc}</p>
-                                <p className="text-xs text-gray-500">{new Date(item.date).toLocaleDateString()}</p>
-                              </div>
-                              <p className="font-semibold text-gray-900 dark:text-white">{formatPKR(item.amount)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+      {/* Report Preview */}
+      {loading ? (
+        <div className="text-gray-500">Loading report data...</div>
+      ) : !monthlySummary ? (
+        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+          <p className="text-gray-500">Koi data nahi mila is mahine ke liye.</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm overflow-x-auto">
+          <h2 className="text-lg font-bold mb-4">Expense Details</h2>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+              <tr>
+                <th className="p-3 rounded-tl-lg">Date</th>
+                <th className="p-3">Category</th>
+                <th className="p-3">Description</th>
+                <th className="p-3 rounded-tr-lg text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportData.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-gray-500">No expenses recorded this month.</td>
+                </tr>
+              ) : (
+                reportData.map((exp, i) => (
+                  <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                    <td className="p-3 whitespace-nowrap">{new Date(exp.expense_date).toLocaleDateString('en-GB')}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-xs font-medium">
+                        {exp.categories?.name}
+                      </span>
+                    </td>
+                    <td className="p-3">{exp.description || '-'}</td>
+                    <td className="p-3 text-right font-medium">{formatPKR(exp.amount)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
