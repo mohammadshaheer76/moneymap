@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts'
+import { 
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip
+} from 'recharts'
 
 export default function ReportsPage() {
   const supabase = createClient()
@@ -12,6 +15,7 @@ export default function ReportsPage() {
   const [availableMonths, setAvailableMonths] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
   const [summary, setSummary] = useState<any>(null)
+  const [categoryData, setCategoryData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -61,14 +65,29 @@ export default function ReportsPage() {
         setExpenses(expsData)
 
         let needs = 0, wants = 0, savings = 0
+        const catTotals: Record<string, { name: string, type: string, amount: number }> = {}
+
         expsData.forEach(exp => {
           const type = exp.categories?.type
+          const catName = exp.categories?.name || 'Unknown'
           const amt = Number(exp.amount)
+
+          // Overall Totals
           if (type === 'needs') needs += amt
           else if (type === 'wants') wants += amt
           else if (type === 'savings') savings += amt
+
+          // Category Totals
+          if (!catTotals[catName]) {
+            catTotals[catName] = { name: catName, type: type || 'unknown', amount: 0 }
+          }
+          catTotals[catName].amount += amt
         })
 
+        // Prepare bar chart data (sorted highest to lowest)
+        const barData = Object.values(catTotals).sort((a, b) => b.amount - a.amount)
+
+        setCategoryData(barData)
         setSummary({
           allocation,
           needs,
@@ -78,6 +97,7 @@ export default function ReportsPage() {
         })
       } else {
         setExpenses([])
+        setCategoryData([])
         setSummary(null)
       }
       setLoading(false)
@@ -108,13 +128,14 @@ export default function ReportsPage() {
 
     const tableData = expenses.map(exp => [
       new Date(exp.expense_date).toLocaleDateString('en-GB'),
+      exp.categories?.type?.toUpperCase() || '-',
       exp.categories?.name || '-',
       exp.description || '-',
       formatPKR(exp.amount)
     ])
 
     autoTable(doc, {
-      head: [['Date', 'Category', 'Description', 'Amount']],
+      head: [['Date', 'Type', 'Category', 'Description', 'Amount']],
       body: tableData,
       startY: 55,
       theme: 'striped',
@@ -137,7 +158,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reports</h1>
@@ -174,49 +195,88 @@ export default function ReportsPage() {
           <p className="text-gray-500">Koi data nahi mila is mahine ke liye.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="space-y-6">
           
-          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-            <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">Expense Breakdown</h2>
-            <div className="h-64">
-              {pieData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-gray-500 text-sm">No expenses yet</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip formatter={(value: any) => formatPKR(Number(value) || 0)} />
-                    <Legend verticalAlign="bottom" height={36}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
+          {/* Top Row: Pie Chart and Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+              <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">Budget Breakdown</h2>
+              <div className="h-64">
+                {pieData.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-gray-500 text-sm">No expenses yet</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip formatter={(value: any) => formatPKR(Number(value) || 0)} />
+                      <Legend verticalAlign="bottom" height={36}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800">
+                <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">Needs Spent</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mt-1">{formatPKR(summary.needs)}</p>
+              </div>
+              <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-800">
+                <p className="text-amber-600 dark:text-amber-400 text-sm font-medium">Wants Spent</p>
+                <p className="text-2xl font-bold text-amber-900 dark:text-amber-100 mt-1">{formatPKR(summary.wants)}</p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-800">
+                <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Savings Spent</p>
+                <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100 mt-1">{formatPKR(summary.savings)}</p>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800">
-              <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">Needs Spent</p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mt-1">{formatPKR(summary.needs)}</p>
+          {/* Middle Row: Category Bar Chart */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+            <h2 className="text-lg font-bold mb-6 text-gray-900 dark:text-white">Spending by Category</h2>
+            <div className="h-72">
+              {categoryData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-500 text-sm">No category data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryData} margin={{ top: 10, right: 10, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
+                    <XAxis dataKey="name" tick={{fontSize: 12}} tickLine={false} axisLine={false} />
+                    <YAxis tick={{fontSize: 12}} tickLine={false} axisLine={false} tickFormatter={(val) => `PKR ${val/1000}k`} />
+                    <BarTooltip 
+                      formatter={(value: any) => [formatPKR(Number(value) || 0), 'Spent']}
+                      cursor={{fill: 'transparent'}}
+                    />
+                    <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                      {categoryData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.type === 'needs' ? '#3b82f6' : entry.type === 'wants' ? '#f59e0b' : '#10b981'} 
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-800">
-              <p className="text-amber-600 dark:text-amber-400 text-sm font-medium">Wants Spent</p>
-              <p className="text-2xl font-bold text-amber-900 dark:text-amber-100 mt-1">{formatPKR(summary.wants)}</p>
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-800">
-              <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Savings Spent</p>
-              <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100 mt-1">{formatPKR(summary.savings)}</p>
+            {/* Legend for Bar Chart */}
+            <div className="flex justify-center gap-6 mt-4 text-sm font-medium">
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Needs</div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div> Wants</div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Savings</div>
             </div>
           </div>
 
