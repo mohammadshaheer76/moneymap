@@ -2,284 +2,226 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { saveExpense, deleteExpense, createCategory } from './actions'
 
 export default function ExpensesPage() {
+  const supabase = createClient()
+  
+  // Default month state
+  const [selectedMonth, setSelectedMonth] = useState('')
+  const [availableMonths, setAvailableMonths] = useState<any[]>([])
+  
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // Form states
   const [amount, setAmount] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
-  const [addToInventory, setAddToInventory] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [categories, setCategories] = useState<any[]>([])
-  const [expenses, setExpenses] = useState<any[]>([])
-  const [status, setStatus] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  // New Category Modal States
-  const [showNewCat, setShowNewCat] = useState(false)
-  const [newCatName, setNewCatName] = useState('')
-  const [newCatType, setNewCatType] = useState('wants')
-
-  const supabase = createClient()
-
+  // 1. Pehle saare available months fetch karo
   useEffect(() => {
-    fetchData()
-  }, [])
+    const fetchMonths = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-  async function fetchData() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+      const { data: allocations } = await supabase
+        .from('salary_allocations')
+        .select('month')
+        .eq('user_id', user.id)
+        .order('month', { ascending: false })
 
-    // 1. Categories fetch karo
-    const { data: cats } = await supabase
-      .from('categories')
-      .select('id, name, type')
-      .or(`user_id.eq.${user.id},is_default.eq.true`)
-    if (cats) setCategories(cats)
-
-    // 2. Direct user ke saare expenses uthao (bina kisi allocation ki shart ke)
-    const { data: exps, error } = await supabase
-      .from('expenses')
-      .select('*, categories(name)')
-      .eq('user_id', user.id)
-      .order('expense_date', { ascending: false })
-
-    if (error) {
-      console.error("Error fetching expenses:", error)
-      return
+      if (allocations && allocations.length > 0) {
+        setAvailableMonths(allocations)
+        setSelectedMonth(allocations[0].month) // Default mein latest month select karo
+      } else {
+        setLoading(false)
+      }
     }
+    fetchMonths()
+  }, [supabase])
 
-    if (exps) {
-      setExpenses(exps)
+  // 2. Jab bhi month change ho, us month ke expenses fetch karo
+  useEffect(() => {
+    if (!selectedMonth) return
+
+    const fetchExpenses = async () => {
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Categories fetch karo
+      const { data: cats } = await supabase.from('categories').select('*')
+      setCategories(cats || [])
+
+      // Us selected month ki allocation dhoondo
+      const { data: allocation } = await supabase
+        .from('salary_allocations')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('month', selectedMonth)
+        .maybeSingle()
+
+      if (allocation) {
+        const { data: exps } = await supabase
+          .from('expenses')
+          .select('*')
+          .eq('allocation_id', allocation.id) // Sirf is month ke expenses
+          .order('expense_date', { ascending: false })
+        
+        setExpenses(exps || [])
+      } else {
+        setExpenses([])
+      }
+      setLoading(false)
     }
-  }
+    fetchExpenses()
+  }, [selectedMonth, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setStatus('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-    const result = await saveExpense({
-      amount: Number(amount),
+    const { data: allocation } = await supabase
+      .from('salary_allocations')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('month', selectedMonth)
+      .maybeSingle()
+
+    if (!allocation) {
+      alert("Pehle is mahine ki salary enter karein!")
+      return
+    }
+
+    const { error } = await supabase.from('expenses').insert({
+      user_id: user.id,
+      allocation_id: allocation.id,
       category_id: categoryId,
-      description,
-      expense_date: date,
-      add_to_inventory: addToInventory,
+      amount: parseFloat(amount),
+      description: description,
+      expense_date: date
     })
 
-    if (result.error) {
-      setStatus(result.error)
+    if (error) {
+      alert(error.message)
     } else {
-      setStatus('Expense saved successfully!')
       setAmount('')
       setDescription('')
-      setAddToInventory(false)
-      fetchData()
+      // List refresh karo
+      const { data: exps } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('allocation_id', allocation.id)
+        .order('expense_date', { ascending: false })
+      setExpenses(exps || [])
     }
-    setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return
-    const result = await deleteExpense(id)
-    if (result.error) alert(result.error)
-    else fetchData()
-  }
+  const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const result = await createCategory(newCatName, newCatType)
-    
-    if (result.error) {
-      alert(result.error)
-    } else {
-      setShowNewCat(false)
-      setNewCatName('')
-      fetchData() // Refresh categories list
-    }
-    setLoading(false)
+  if (availableMonths.length === 0 && !loading) {
+    return (
+      <div className="text-center py-20">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Salary Data Found</h2>
+        <p className="text-gray-500">Please go to the Salary page and enter your salary first.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 text-gray-900 dark:text-white relative">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Expense Tracking</h1>
-        <p className="text-gray-600 dark:text-gray-400">Log your expenses here. Every entry is tracked against its category.</p>
+    <div className="max-w-5xl mx-auto space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Expense Tracking</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Log your expenses here. Every entry is tracked against its category.</p>
+        </div>
+        
+        {/* Month Selector Dropdown */}
+        <div className="bg-white dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <select 
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="p-2 bg-transparent text-sm font-bold focus:outline-none cursor-pointer"
+          >
+            {availableMonths.map((alloc) => (
+              <option key={alloc.month} value={alloc.month}>
+                {new Date(alloc.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Form Section */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">New Expense</h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="md:col-span-1">
+          <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 space-y-4 shadow-sm">
+            <h2 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">New Expense</h2>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (PKR)</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                required
-                placeholder="e.g. 1500"
-              />
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" placeholder="e.g. 1500" />
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-                <button 
-                  type="button" 
-                  onClick={() => setShowNewCat(true)} 
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  + Create new category
-                </button>
-              </div>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                required
-              >
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+              <select value={categoryId} onChange={e => setCategoryId(e.target.value)} required className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700">
                 <option value="">-- Select a category --</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="e.g. Nike Shoes"
-              />
-
-            <div className="flex items-center gap-2 mt-2">
-              <input 
-                type="checkbox" 
-                id="inv" 
-                checked={addToInventory} 
-                onChange={(e) => setAddToInventory(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded"
-              />
-              <label htmlFor="inv" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                I bought this as an asset (Add to Inventory)
-              </label>
+              <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" placeholder="e.g. Nike Shoes" />
             </div>
-</div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                required
-              />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 mt-2"
-            >
-              {loading ? 'Saving...' : 'Save Expense'}
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition-colors mt-2">
+              Add Expense
             </button>
-
-            {status && (
-              <p className={`text-sm text-center mt-2 ${status.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>
-                {status}
-              </p>
-            )}
           </form>
         </div>
 
-        {/* Expense List Section */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">This Month's Expenses</h2>
-          <div className="space-y-3">
-            {expenses.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 text-sm">No expenses logged yet.</p>
-            ) : (
-              expenses.map((exp) => (
-                <div key={exp.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 flex justify-between items-center group">
-                  <div>
-                    <p className="font-medium">{exp.categories?.name || 'Unknown'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{exp.expense_date} {exp.description && `• ${exp.description}`}</p>
+        {/* List Section */}
+        <div className="md:col-span-2">
+          <h2 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">
+            Expenses for {new Date(selectedMonth).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+          </h2>
+          
+          {loading ? (
+            <div className="text-gray-500">Loading expenses...</div>
+          ) : expenses.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+              <p className="text-gray-500">Is mahine ka koi kharcha record nahi mila.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {expenses.map(exp => {
+                const cat = categories.find(c => c.id === exp.category_id)
+                return (
+                  <div key={exp.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                    <div>
+                      <p className="font-bold text-gray-900 dark:text-white">{exp.description || cat?.name}</p>
+                      <p className="text-xs text-gray-500">{exp.expense_date} • {cat?.name}</p>
+                    </div>
+                    <span className="font-semibold text-gray-900 dark:text-white">{formatPKR(exp.amount)}</span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <p className="font-bold">PKR {Number(exp.amount).toLocaleString()}</p>
-                    <button 
-                      onClick={() => handleDelete(exp.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 text-lg"
-                      title="Delete expense"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Create Category Modal */}
-      {showNewCat && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-full max-w-sm border border-gray-200 dark:border-gray-800 shadow-xl">
-            <h3 className="text-lg font-bold mb-4">New Category</h3>
-            <form onSubmit={handleCreateCategory} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Category Name</label>
-                <input
-                  type="text"
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800"
-                  required
-                  placeholder="e.g. Pet Food"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Type</label>
-                <select
-                  value={newCatType}
-                  onChange={(e) => setNewCatType(e.target.value)}
-                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800"
-                >
-                  <option value="needs">Needs (Essential)</option>
-                  <option value="wants">Wants (Lifestyle)</option>
-                  <option value="savings">Savings (Investment)</option>
-                </select>
-              </div>
-              <div className="flex gap-2 justify-end mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewCat(false)}
-                  className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

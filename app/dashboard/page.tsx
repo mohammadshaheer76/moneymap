@@ -2,7 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function DashboardPage({ searchParams }: { searchParams: { month?: string } }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const resolvedParams = await searchParams;
+  const requestedMonth = resolvedParams.month;
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -13,17 +16,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Saare available months fetch karo (dropdown ke liye)
   const { data: allAllocations } = await supabase
     .from('salary_allocations')
     .select('month')
     .eq('user_id', user.id)
     .order('month', { ascending: false })
 
-  // Default month: URL se lo, agar nahi hai toh latest month
-  const selectedMonth = searchParams.month || (allAllocations && allAllocations.length > 0 ? allAllocations[0].month : null)
+  let selectedMonth = requestedMonth;
+  if (!selectedMonth && allAllocations && allAllocations.length > 0) {
+    selectedMonth = allAllocations[0].month;
+  }
 
-  // Us selected month ki allocation fetch karo
   let allocation = null
   if (selectedMonth) {
     const { data } = await supabase
@@ -35,22 +38,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     allocation = data
   }
 
-
-  // Fetch Active Goals
   const { data: goals } = await supabase
     .from('goals')
     .select('*')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .order('created_at', { ascending: false })
-    .limit(2) // Sirf top 2 goals dashboard par dikhayenge
+    .limit(2)
 
   let summary = null
   if (allocation) {
+    // FIX: Sirf us allocation_id ke expenses fetch karo, na ke saare user ke
     const { data: expenses } = await supabase
       .from('expenses')
       .select('amount, category_id, description, expense_date')
-      .eq('allocation_id', allocation.id)
+      .eq('allocation_id', allocation.id) // <--- Yeh line sabse important hai
 
     const { data: categories } = await supabase.from('categories').select('id, name, type')
     const categoryMap = new Map((categories || []).map((c) => [c.id, c]))
@@ -99,17 +101,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       {/* Month Selector */}
       {allAllocations && allAllocations.length > 0 && (
         <div className="flex justify-end mb-4">
-          <form className="flex items-center gap-2">
+          <form className="flex items-center gap-2" method="GET">
             <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Viewing Month:</label>
             <select 
               name="month"
               defaultValue={selectedMonth || ''}
               className="p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-              // Note: Next.js Server Component mein onChange nahi chalta, isliye form submit use karenge
             >
               {allAllocations.map((alloc: any) => (
                 <option key={alloc.month} value={alloc.month}>
-                  {new Date(alloc.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}
+                  {new Date(alloc.month).toLocaleDateString('en-PK', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                 </option>
               ))}
             </select>
@@ -225,50 +226,46 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         </>
       )}
 
-
-          {/* GOALS PREVIEW SECTION */}
-          {goals && goals.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm mt-6">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🎯</span>
-                  <h3 className="font-bold text-gray-900 dark:text-white">My Saving Goals</h3>
-                </div>
-                <Link href="/goals" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                  View All →
-                </Link>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {goals.map((goal: any) => {
-                  const progress = Math.min(100, (Number(goal.saved_amount) / Number(goal.target_amount)) * 100);
-                  const isCompleted = progress >= 100;
-                  return (
-                    <div key={goal.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="font-bold text-gray-900 dark:text-white">{goal.name}</p>
-                        <span className={`text-sm font-bold ${isCompleted ? 'text-emerald-500' : 'text-blue-500'}`}>
-                          {Math.round(progress)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                        <div 
-                          className={`h-2 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`} 
-                          style={{ width: `${progress}%` }} 
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>{formatPKR(Number(goal.saved_amount))}</span>
-                        <span>{formatPKR(Number(goal.target_amount))}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+      {/* GOALS PREVIEW SECTION */}
+      {goals && goals.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm mt-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎯</span>
+              <h3 className="font-bold text-gray-900 dark:text-white">My Saving Goals</h3>
             </div>
-          )}
-
-
-          
+            <Link href="/goals" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              View All →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {goals.map((goal: any) => {
+              const progress = Math.min(100, (Number(goal.saved_amount) / Number(goal.target_amount)) * 100);
+              const isCompleted = progress >= 100;
+              return (
+                <div key={goal.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="font-bold text-gray-900 dark:text-white">{goal.name}</p>
+                    <span className={`text-sm font-bold ${isCompleted ? 'text-emerald-500' : 'text-blue-500'}`}>
+                      {Math.round(progress)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                    <div 
+                      className={`h-2 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`} 
+                      style={{ width: `${progress}%` }} 
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{formatPKR(Number(goal.saved_amount))}</span>
+                    <span>{formatPKR(Number(goal.target_amount))}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/questionnaire" className="group flex items-center gap-4 p-5 bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all">
