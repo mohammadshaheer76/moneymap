@@ -17,7 +17,6 @@ export async function saveSalary(data: {
     return { error: 'You must be logged in.' }
   }
 
-  // 1. Profile fetch karo
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('*')
@@ -28,7 +27,6 @@ export async function saveSalary(data: {
     return { error: 'Please complete your profile first.' }
   }
 
-  // 2. Saare budget rules fetch karo (Priority ke hisaab se: chota number pehle)
   const { data: rules } = await supabase
     .from('budget_rules')
     .select('*')
@@ -39,34 +37,28 @@ export async function saveSalary(data: {
   let suggestedSavings = 20
 
   if (rules && rules.length > 0) {
-    // 3. Har rule ko check karo ke kya woh user ke profile se match karta hai
     for (const rule of rules) {
       let matches = true
       const conditions = rule.condition_json as Record<string, any>
 
-      // Agar condition_json khaali hai (Default Rule), toh isko skip karo abhi
       if (!conditions || Object.keys(conditions).length === 0) continue
 
       for (const [key, value] of Object.entries(conditions)) {
-        // Profile object mein value check karo
         const profileValue = (profile as any)[key]
-        
         if (profileValue !== value) {
           matches = false
           break
         }
       }
 
-      // Agar sab conditions match ho gayin, toh yeh rule apply karo aur loop tor do
       if (matches) {
         suggestedNeeds = rule.needs_percent
         suggestedWants = rule.wants_percent
         suggestedSavings = rule.savings_percent
-        break // Pehla match mil gaya, ab aage mat dekho
+        break
       }
     }
 
-    // 4. Agar koi specific rule match nahi hua, toh Default rule lagao
     if (suggestedNeeds === 50 && suggestedWants === 30) {
       const defaultRule = rules.find(r => !r.condition_json || Object.keys(r.condition_json).length === 0)
       if (defaultRule) {
@@ -77,7 +69,6 @@ export async function saveSalary(data: {
     }
   }
 
-  // 5. Agar user ne manually percentages diye hain, toh unhe use karo
   const needs = data.needs_percent ?? suggestedNeeds
   const wants = data.wants_percent ?? suggestedWants
   const savings = data.savings_percent ?? suggestedSavings
@@ -90,12 +81,14 @@ export async function saveSalary(data: {
   const wants_amount = (data.net_salary * wants) / 100
   const savings_amount = (data.net_salary * savings) / 100
 
+  const safeMonth = data.month.substring(0, 7) + '-01';
+
   const { error } = await supabase
     .from('salary_allocations')
     .upsert(
       {
         user_id: user.id,
-        month: data.month,
+        month: safeMonth, 
         net_salary: data.net_salary,
         needs_percent: needs,
         wants_percent: wants,

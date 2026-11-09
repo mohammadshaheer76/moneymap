@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 export default function SalaryPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [month, setMonth] = useState('')
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [salary, setSalary] = useState('')
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,7 +23,7 @@ export default function SalaryPage() {
     const init = async () => {
       const d = new Date()
       const defaultMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-      setMonth(defaultMonth)
+      setMonth(defaultMonth.substring(0, 7))
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoadingExisting(false); return }
@@ -36,12 +36,7 @@ export default function SalaryPage() {
         .maybeSingle()
 
       if (data) {
-        setMonth(data.month)
-        setSalary(String(data.net_salary))
-        setNeeds(data.needs_percent)
-        setWants(data.wants_percent)
-        setSavings(data.savings_percent)
-        setIsEdit(true)
+        setMonth(data.month.substring(0, 7))
         setSalary(String(data.net_salary))
         setNeeds(data.needs_percent)
         setWants(data.wants_percent)
@@ -72,8 +67,10 @@ export default function SalaryPage() {
     setLoading(true)
     setStatus('Saving...')
 
+    const safeMonth = month.substring(0, 7) + '-01';
+
     const result = await saveSalary({
-      month,
+      month: safeMonth,
       net_salary: parseFloat(salary),
       needs_percent: needs,
       wants_percent: wants,
@@ -110,12 +107,12 @@ export default function SalaryPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Month</label>
               <input
-                type="date"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                required
-              />
+                  type="month"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  required
+                />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Net Salary (PKR)</label>

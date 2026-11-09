@@ -37,7 +37,7 @@ export default function Home() {
           </h1>
           
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            The all-in-one personal finance app. Smartly split your salary, track daily expenses, manage your assets, and save for your dreams.
+            The all-in-one personal finance app. Smartly split your salary, track daily expenses, manage your inventory assets, and save for your dreams.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
@@ -56,7 +56,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Features Section - 5 Features Now */}
+        {/* Features Section - 5 Features */}
         <div className="max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-28 w-full pb-20">
           
           <div className="p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm text-left hover:-translate-y-1 transition-transform">
