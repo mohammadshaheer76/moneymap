@@ -46,14 +46,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     .order('created_at', { ascending: false })
     .limit(2)
 
-  // NAYA: AI Suggestions Fetch
-  const { data: aiSuggestions } = await supabase
-    .from('ai_suggestions')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_read', false)
-    .order('created_at', { ascending: false })
-    .limit(3)
+  // FIX: AI Suggestions sirf usi month ke fetch karo jo select hua hai
+  let aiSuggestions = null
+  if (allocation) {
+    const { data } = await supabase
+      .from('ai_suggestions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('allocation_id', allocation.id)
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+      .limit(3)
+    aiSuggestions = data
+  }
 
   let summary = null
   if (allocation) {
@@ -136,12 +141,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
-      {/* AI INSIGHTS SECTION - NAYA */}
+      {/* AI INSIGHTS SECTION */}
       {aiSuggestions && aiSuggestions.length > 0 && (
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🤖</span>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg">AI Insights for You</h3>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg">AI Insights for {new Date(selectedMonth || new Date()).toLocaleDateString('en-PK', { month: 'long', timeZone: 'UTC' })}</h3>
           </div>
           <div className="space-y-3">
             {aiSuggestions.map((suggestion: any) => (
