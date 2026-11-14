@@ -72,19 +72,16 @@ export default function ReportsPage() {
           const catName = exp.categories?.name || 'Unknown'
           const amt = Number(exp.amount)
 
-          // Overall Totals
           if (type === 'needs') needs += amt
           else if (type === 'wants') wants += amt
           else if (type === 'savings') savings += amt
 
-          // Category Totals
           if (!catTotals[catName]) {
             catTotals[catName] = { name: catName, type: type || 'unknown', amount: 0 }
           }
           catTotals[catName].amount += amt
         })
 
-        // Prepare bar chart data (sorted highest to lowest)
         const barData = Object.values(catTotals).sort((a, b) => b.amount - a.amount)
 
         setCategoryData(barData)
@@ -272,12 +269,52 @@ export default function ReportsPage() {
                 </ResponsiveContainer>
               )}
             </div>
-            {/* Legend for Bar Chart */}
             <div className="flex justify-center gap-6 mt-4 text-sm font-medium">
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Needs</div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div> Wants</div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Savings</div>
             </div>
+          </div>
+
+          {/* Bottom Row: All Expense Entries Table */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm overflow-x-auto">
+            <h2 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">All Expense Entries</h2>
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                <tr>
+                  <th className="p-3 rounded-tl-lg">Date</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Description</th>
+                  <th className="p-3 rounded-tr-lg text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-gray-500">No expenses recorded this month.</td>
+                  </tr>
+                ) : (
+                  expenses.map((exp, i) => (
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="p-3">{new Date(exp.expense_date).toLocaleDateString('en-GB')}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${
+                          exp.categories?.type === 'needs' ? 'bg-blue-100 text-blue-700' :
+                          exp.categories?.type === 'wants' ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {exp.categories?.type}
+                        </span>
+                      </td>
+                      <td className="p-3 font-medium text-gray-900 dark:text-white">{exp.categories?.name || '-'}</td>
+                      <td className="p-3 text-gray-500">{exp.description || '-'}</td>
+                      <td className="p-3 text-right font-bold text-gray-900 dark:text-white">{formatPKR(exp.amount)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
         </div>
