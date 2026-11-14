@@ -46,13 +46,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     .order('created_at', { ascending: false })
     .limit(2)
 
+  // NAYA: AI Suggestions Fetch
+  const { data: aiSuggestions } = await supabase
+    .from('ai_suggestions')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_read', false)
+    .order('created_at', { ascending: false })
+    .limit(3)
+
   let summary = null
   if (allocation) {
-    // FIX: Sirf us allocation_id ke expenses fetch karo, na ke saare user ke
     const { data: expenses } = await supabase
       .from('expenses')
       .select('amount, category_id, description, expense_date')
-      .eq('allocation_id', allocation.id) // <--- Yeh line sabse important hai
+      .eq('allocation_id', allocation.id)
 
     const { data: categories } = await supabase.from('categories').select('id, name, type')
     const categoryMap = new Map((categories || []).map((c) => [c.id, c]))
@@ -127,6 +135,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <p className="text-white/70 text-sm mt-1">{user.email}</p>
         </div>
       </div>
+
+      {/* AI INSIGHTS SECTION - NAYA */}
+      {aiSuggestions && aiSuggestions.length > 0 && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800 p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-2xl">🤖</span>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg">AI Insights for You</h3>
+          </div>
+          <div className="space-y-3">
+            {aiSuggestions.map((suggestion: any) => (
+              <div key={suggestion.id} className={`p-4 rounded-xl border flex items-start gap-3 ${
+                suggestion.severity === 'high' 
+                  ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' 
+                  : 'bg-white border-indigo-100 dark:bg-gray-800 dark:border-gray-700'
+              }`}>
+                <div className="text-xl mt-0.5">
+                  {suggestion.severity === 'high' ? '🚨' : '💡'}
+                </div>
+                <div>
+                  <p className={`text-sm font-medium ${suggestion.severity === 'high' ? 'text-red-800 dark:text-red-200' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {suggestion.suggestion_text}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(suggestion.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!allocation ? (
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-3xl p-10 text-center">
