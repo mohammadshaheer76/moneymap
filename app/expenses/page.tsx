@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 export default function ExpensesPage() {
   const supabase = createClient()
   
-  // Default month state
   const [selectedMonth, setSelectedMonth] = useState('')
   const [availableMonths, setAvailableMonths] = useState<any[]>([])
   
@@ -19,8 +18,8 @@ export default function ExpensesPage() {
   const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [addToInventory, setAddToInventory] = useState(false) // Naya state
 
-  // 1. Pehle saare available months fetch karo
   useEffect(() => {
     const fetchMonths = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -34,7 +33,7 @@ export default function ExpensesPage() {
 
       if (allocations && allocations.length > 0) {
         setAvailableMonths(allocations)
-        setSelectedMonth(allocations[0].month) // Default mein latest month select karo
+        setSelectedMonth(allocations[0].month)
       } else {
         setLoading(false)
       }
@@ -42,7 +41,6 @@ export default function ExpensesPage() {
     fetchMonths()
   }, [supabase])
 
-  // 2. Jab bhi month change ho, us month ke expenses fetch karo
   useEffect(() => {
     if (!selectedMonth) return
 
@@ -51,11 +49,9 @@ export default function ExpensesPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Categories fetch karo
       const { data: cats } = await supabase.from('categories').select('*')
       setCategories(cats || [])
 
-      // Us selected month ki allocation dhoondo
       const { data: allocation } = await supabase
         .from('salary_allocations')
         .select('id')
@@ -67,7 +63,7 @@ export default function ExpensesPage() {
         const { data: exps } = await supabase
           .from('expenses')
           .select('*')
-          .eq('allocation_id', allocation.id) // Sirf is month ke expenses
+          .eq('allocation_id', allocation.id)
           .order('expense_date', { ascending: false })
         
         setExpenses(exps || [])
@@ -96,6 +92,7 @@ export default function ExpensesPage() {
       return
     }
 
+    // 1. Expense save karo
     const { error } = await supabase.from('expenses').insert({
       user_id: user.id,
       allocation_id: allocation.id,
@@ -106,18 +103,38 @@ export default function ExpensesPage() {
     })
 
     if (error) {
-      alert(error.message)
-    } else {
-      setAmount('')
-      setDescription('')
-      // List refresh karo
-      const { data: exps } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('allocation_id', allocation.id)
-        .order('expense_date', { ascending: false })
-      setExpenses(exps || [])
+      alert("Expense Error: " + error.message)
+      return
     }
+
+    // 2. Agar Inventory ka checkbox tick hai, toh asset save karo
+    if (addToInventory) {
+      const { error: invError } = await supabase.from('inventory').insert({
+        user_id: user.id,
+        name: description || 'Unnamed Asset',
+        purchase_price: parseFloat(amount),
+        purchase_date: date,
+        category: categories.find(c => c.id === categoryId)?.name || 'General'
+      })
+
+      if (invError) {
+        console.error("Inventory Error:", invError.message)
+        alert("Expense saved, but failed to add to inventory.")
+      }
+    }
+
+    // Reset form
+    setAmount('')
+    setDescription('')
+    setAddToInventory(false)
+    
+    // Refresh list
+    const { data: exps } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('allocation_id', allocation.id)
+      .order('expense_date', { ascending: false })
+    setExpenses(exps || [])
   }
 
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
@@ -139,7 +156,6 @@ export default function ExpensesPage() {
           <p className="text-gray-500 dark:text-gray-400 mt-1">Log your expenses here. Every entry is tracked against its category.</p>
         </div>
         
-        {/* Month Selector Dropdown */}
         <div className="bg-white dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
           <select 
             value={selectedMonth}
@@ -179,6 +195,20 @@ export default function ExpensesPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (optional)</label>
               <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" placeholder="e.g. Nike Shoes" />
+            </div>
+
+            {/* INVENTORY CHECKBOX WAPAS AA GAYA */}
+            <div className="flex items-center gap-2 pt-2 pb-2">
+              <input 
+                type="checkbox" 
+                id="inventory"
+                checked={addToInventory}
+                onChange={(e) => setAddToInventory(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <label htmlFor="inventory" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                I bought this as an asset (Add to Inventory)
+              </label>
             </div>
 
             <div>
