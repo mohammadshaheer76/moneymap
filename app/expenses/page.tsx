@@ -136,12 +136,15 @@ function ExpenseForm() {
 
     // 2. Agar Inventory ka checkbox tick hai, toh asset save karo
     if (addToInventory) {
+      // FIX: Yahan database ke exact columns use kiye hain jo aapke screenshot mein thay
       const { error: invError } = await supabase.from('inventory').insert({
         user_id: user.id,
-        name: description || 'Unnamed Asset',
+        item_name: description || categories.find(c => c.id === categoryId)?.name || 'Unnamed Asset', 
+        description: description,
+        category: categories.find(c => c.id === categoryId)?.name || 'General',
         purchase_price: parseFloat(amount),
         purchase_date: date,
-        category: categories.find(c => c.id === categoryId)?.name || 'General'
+        status: 'Owned' // Optional: agar aap status track karte hain
       })
 
       if (invError) {
