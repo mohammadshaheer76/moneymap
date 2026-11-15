@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-export default function ExpensesPage() {
+function ExpenseForm() {
   const supabase = createClient()
   
   const [selectedMonth, setSelectedMonth] = useState('')
@@ -18,7 +18,12 @@ export default function ExpensesPage() {
   const [categoryId, setCategoryId] = useState('')
   const [description, setDescription] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [addToInventory, setAddToInventory] = useState(false) // Naya state
+  const [addToInventory, setAddToInventory] = useState(false)
+
+  // Naya Category banane ke states
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryType, setNewCategoryType] = useState('needs')
 
   useEffect(() => {
     const fetchMonths = async () => {
@@ -41,39 +46,61 @@ export default function ExpensesPage() {
     fetchMonths()
   }, [supabase])
 
-  useEffect(() => {
+  const fetchData = async () => {
     if (!selectedMonth) return
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-    const fetchExpenses = async () => {
-      setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    const { data: cats } = await supabase.from('categories').select('*')
+    setCategories(cats || [])
 
-      const { data: cats } = await supabase.from('categories').select('*')
-      setCategories(cats || [])
+    const { data: allocation } = await supabase
+      .from('salary_allocations')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('month', selectedMonth)
+      .maybeSingle()
 
-      const { data: allocation } = await supabase
-        .from('salary_allocations')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('month', selectedMonth)
-        .maybeSingle()
-
-      if (allocation) {
-        const { data: exps } = await supabase
-          .from('expenses')
-          .select('*')
-          .eq('allocation_id', allocation.id)
-          .order('expense_date', { ascending: false })
-        
-        setExpenses(exps || [])
-      } else {
-        setExpenses([])
-      }
-      setLoading(false)
+    if (allocation) {
+      const { data: exps } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('allocation_id', allocation.id)
+        .order('expense_date', { ascending: false })
+      
+      setExpenses(exps || [])
+    } else {
+      setExpenses([])
     }
-    fetchExpenses()
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchData()
   }, [selectedMonth, supabase])
+
+  // Naya Category Add karne ka function
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error } = await supabase.from('categories').insert({
+      user_id: user.id,
+      name: newCategoryName,
+      type: newCategoryType,
+      is_default: false
+    })
+
+    if (error) {
+      alert("Category error: " + error.message)
+    } else {
+      setNewCategoryName('')
+      setIsAddingCategory(false)
+      fetchData() // Categories refresh karo
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -118,8 +145,7 @@ export default function ExpensesPage() {
       })
 
       if (invError) {
-        console.error("Inventory Error:", invError.message)
-        alert("Expense saved, but failed to add to inventory.")
+        alert("Expense saved, but Inventory error: " + invError.message)
       }
     }
 
@@ -127,14 +153,7 @@ export default function ExpensesPage() {
     setAmount('')
     setDescription('')
     setAddToInventory(false)
-    
-    // Refresh list
-    const { data: exps } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('allocation_id', allocation.id)
-      .order('expense_date', { ascending: false })
-    setExpenses(exps || [])
+    fetchData() // List refresh karo
   }
 
   const formatPKR = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
@@ -183,13 +202,34 @@ export default function ExpensesPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-              <select value={categoryId} onChange={e => setCategoryId(e.target.value)} required className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700">
-                <option value="">-- Select a category --</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                <button type="button" onClick={() => setIsAddingCategory(!isAddingCategory)} className="text-xs text-blue-600 hover:underline">
+                  + Create new category
+                </button>
+              </div>
+
+              {isAddingCategory ? (
+                <div className="p-3 border rounded-lg bg-gray-50 dark:bg-gray-800 space-y-2 mb-2">
+                  <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Category Name" className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm" />
+                  <select value={newCategoryType} onChange={e => setNewCategoryType(e.target.value)} className="w-full p-2 border rounded-lg dark:bg-gray-900 dark:border-gray-700 text-sm">
+                    <option value="needs">Needs</option>
+                    <option value="wants">Wants</option>
+                    <option value="savings">Savings</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={handleAddCategory} className="flex-1 bg-blue-600 text-white py-1 rounded text-sm">Save</button>
+                    <button type="button" onClick={() => setIsAddingCategory(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white py-1 rounded text-sm">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} required className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                  <option value="">-- Select a category --</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
@@ -197,7 +237,6 @@ export default function ExpensesPage() {
               <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700" placeholder="e.g. Nike Shoes" />
             </div>
 
-            {/* INVENTORY CHECKBOX WAPAS AA GAYA */}
             <div className="flex items-center gap-2 pt-2 pb-2">
               <input 
                 type="checkbox" 
@@ -253,5 +292,13 @@ export default function ExpensesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ExpensesPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-gray-500">Loading page...</div>}>
+      <ExpenseForm />
+    </Suspense>
   )
 }
